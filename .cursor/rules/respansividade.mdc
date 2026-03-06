@@ -1,0 +1,42 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+Para apps fluter para melhorar a respansividade use :
+Layouts Flexíveis
+
+Use widgets como Expanded, Flexiblee Spacerdentro de Rowe Columnpara criar layouts que se adaptem ao espaço disponível
+Implemente LayoutBuilderpara obter as dimensões do espaço disponível e ajuste o layout de acordo
+Utilize MediaQuerypara acessar o tamanho da tela, orientação e densidade de pixels
+
+Dimensionamento Relativo
+
+Evite valores fixos de altura e largura sempre que possível
+Calcular dimensões em relação ao tamanho da tela:
+dardodouble width = MediaQuery.of(context).size.width * 0.8; // 80% da largura da tela
+
+Use FractionallySizedBoxpara criar widgets que ocupem uma fração do espaço disponível
+
+Widgets Responsivos
+
+AspectRatio- mantém uma proporção específica entre largura e altura
+FittedBox- dimensionar e posicionar seu filho dentro do espaço disponível
+Wrap- crie linhas ou colunas que quebram quando não há espaço suficiente
+
+Adaptar para Diferentes Dispositivos
+dardofinal screenWidth = MediaQuery.of(context).size.width;
+
+if (screenWidth < 600) {
+  // Layout para dispositivos pequenos
+  return MobileLayout();
+} else {
+  // Layout para tablets e desktop
+  return DesktopLayout();
+}
+Outras Técnicas Importantes
+
+Use SafeAreapara evitar sobreposições com exposições, câmeras ou barras de sistema
+Implemente SingleChildScrollViewou ListViewpara tornar seu conteúdo rolável quando necessário
+
+Considere usar pacotes como responsive_framework, flutter_screenutilou device_previewpara facilitar o desenvolvimento responsivo

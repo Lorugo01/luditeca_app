@@ -1,0 +1,10 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+"Evitar componentes duplicados",
+"Remover código morto ou não utilizado",
+"Seguir padrões de codificação do projeto",
+
+"Manter consistência na estrutura de pastas e arquivos"
