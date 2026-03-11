@@ -25,32 +25,17 @@ class AuthController extends GetxController {
   }
 
   void _loadCurrentUser() {
-    debugPrint('AuthController: Carregando usuário atual');
     _currentUser.value = _supabaseService.getCurrentUser();
-    if (_currentUser.value != null) {
-      debugPrint(
-        'AuthController: Usuário já logado: ${_currentUser.value!.email}',
-      );
-    } else {
-      debugPrint('AuthController: Nenhum usuário logado');
-    }
     _initialLoadCompleted.value = true;
   }
 
   void _setupAuthListener() {
-    debugPrint('AuthController: Configurando listener de autenticação');
     _supabaseService.authStateChanges().listen((state) {
-      debugPrint('AuthController: Evento de autenticação: ${state.event}');
-
       if (state.event == AuthChangeEvent.signedIn ||
           state.event == AuthChangeEvent.userUpdated) {
         _currentUser.value = state.session?.user;
-        debugPrint(
-          'AuthController: Usuário logado: ${_currentUser.value?.email}',
-        );
       } else if (state.event == AuthChangeEvent.signedOut) {
         _currentUser.value = null;
-        debugPrint('AuthController: Usuário deslogado');
       }
     });
   }
@@ -59,27 +44,19 @@ class AuthController extends GetxController {
     _error.value = '';
     _isLoading.value = true;
 
-    debugPrint('AuthController: Tentando login com email: $email');
-
     try {
       final response = await _supabaseService.signIn(email, password);
       _currentUser.value = response.user;
       _isLoading.value = false;
 
-      debugPrint(
-        'AuthController: Login bem sucedido para: ${_currentUser.value?.email}',
-      );
-
       return true;
     } on AuthException catch (e) {
       _error.value = _getAuthErrorMessage(e);
       _isLoading.value = false;
-      debugPrint('AuthController: Erro no login: ${_error.value}');
       return false;
     } catch (e) {
       _error.value = 'Erro inesperado: $e';
       _isLoading.value = false;
-      debugPrint('AuthController: Erro inesperado no login: ${_error.value}');
       return false;
     }
   }

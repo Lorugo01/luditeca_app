@@ -1,6 +1,10 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../reader/pages/reader_page.dart';
+import '../../reader/pages/reader_webview_page.dart';
 import '../../../core/models/book_model.dart';
 import '../../favorites/controllers/favorites_controller.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -119,16 +123,33 @@ class _BookDetailsPageState extends State<BookDetailsPage>
   }
 
   void _navigateWithTransition() {
-    Get.to(
-      () => ReaderPage(
-        bookId: widget.book['id'].toString(),
-        initialPage: null,
-        initialStep: 0,
-      ),
-      transition: Transition.fadeIn,
-      duration: const Duration(milliseconds: 500),
-      curve: Curves.easeInOut,
-    );
+    final slidebookUrl = bookModel.slidebookLink;
+
+    final canUseWebView =
+        kIsWeb ||
+        (Platform.isAndroid || Platform.isIOS);
+
+    if (slidebookUrl != null &&
+        slidebookUrl.isNotEmpty &&
+        canUseWebView) {
+      Get.to(
+        () => ReaderWebViewPage(slidebookUrl: slidebookUrl),
+        transition: Transition.fadeIn,
+        duration: const Duration(milliseconds: 500),
+        curve: Curves.easeInOut,
+      );
+    } else {
+      Get.to(
+        () => ReaderPage(
+          bookId: widget.book['id'].toString(),
+          initialPage: null,
+          initialStep: 0,
+        ),
+        transition: Transition.fadeIn,
+        duration: const Duration(milliseconds: 500),
+        curve: Curves.easeInOut,
+      );
+    }
   }
 
   @override

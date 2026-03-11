@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 class Book {
   final List<BookPage> pages;
 
@@ -211,8 +209,20 @@ class BookPage {
   BookPage({required this.background, required this.elements});
 
   factory BookPage.fromJson(Map<String, dynamic> json) {
+    final backgroundData = json['background'];
+    String backgroundUrl = '';
+
+    if (backgroundData is String) {
+      backgroundUrl = backgroundData;
+    } else if (backgroundData is Map<String, dynamic>) {
+      final url = backgroundData['url'];
+      if (url is String) {
+        backgroundUrl = url;
+      }
+    }
+
     return BookPage(
-      background: json['background']['url'] as String,
+      background: backgroundUrl,
       elements:
           (json['elements'] as List)
               .map((element) => BookElement.fromJson(element))

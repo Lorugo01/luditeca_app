@@ -47,8 +47,6 @@ class _ReaderPageState extends State<ReaderPage> {
   final AuthController _authController = Get.find<AuthController>();
 
   bool _autoPlay = false;
-  Future<void>? _autoPlayFuture;
-  bool _isHandlingBack = false;
   bool _hasShownCompletionMessage = false;
 
   @override
@@ -103,7 +101,7 @@ class _ReaderPageState extends State<ReaderPage> {
       _autoPlay = !_autoPlay;
     });
     if (_autoPlay) {
-      _autoPlayFuture = _autoAdvanceSteps();
+      _autoAdvanceSteps();
     } else {
       _cleanupAudioPlayers();
     }
@@ -550,6 +548,8 @@ class _ReaderPageState extends State<ReaderPage> {
       }
     }
 
+    if (!mounted) return;
+
     if (Navigator.of(context).canPop()) {
       Navigator.of(context).pop();
     } else {
@@ -573,10 +573,11 @@ class _ReaderPageState extends State<ReaderPage> {
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () async {
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
         await _handleBack();
-        return false;
       },
       child: Scaffold(
         body: Obx(() {
@@ -712,7 +713,7 @@ class _ReaderPageState extends State<ReaderPage> {
                               Icons.arrow_back,
                               color: Colors.white,
                             ),
-                            onPressed: () => Navigator.of(context).pop(),
+                            onPressed: _handleBack,
                           ),
                           // Espaço entre o botão e os pontos
                           const SizedBox(width: 8),

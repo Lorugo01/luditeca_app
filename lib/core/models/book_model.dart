@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
 
 class BookModel {
   final int id;
@@ -8,6 +7,7 @@ class BookModel {
   final String? description;
   final String? coverImage;
   final Map<String, dynamic>? pages;
+  final String? slidebookLink;
   final DateTime createdAt;
   final int? authorId;
   final int categoryId;
@@ -20,6 +20,7 @@ class BookModel {
     this.description,
     this.coverImage,
     this.pages,
+    this.slidebookLink,
     required this.createdAt,
     this.authorId,
     required this.categoryId,
@@ -27,7 +28,6 @@ class BookModel {
   });
 
   factory BookModel.fromJson(Map<String, dynamic> json) {
-    debugPrint('Convertendo JSON para BookModel: $json');
     try {
       final pagesData = json['pages'];
       Map<String, dynamic>? parsedPages;
@@ -37,9 +37,7 @@ class BookModel {
           // Se pages vier como string JSON, vamos tentar fazer o parse
           try {
             parsedPages = Map<String, dynamic>.from(jsonDecode(pagesData));
-          } catch (e) {
-            debugPrint('Erro ao fazer parse do campo pages: $e');
-          }
+          } catch (_) {}
         } else if (pagesData is Map) {
           parsedPages = Map<String, dynamic>.from(pagesData);
         }
@@ -52,13 +50,13 @@ class BookModel {
         description: json['description'] as String?,
         coverImage: json['cover_image'] as String?,
         pages: parsedPages,
+        slidebookLink: json['link_slidebook'] as String?,
         createdAt: DateTime.parse(json['created_at'] as String),
         authorId: json['author_id'] as int?,
         categoryId: json['category_id'] as int,
         isFavorite: false,
       );
     } catch (e) {
-      debugPrint('Erro ao converter JSON para BookModel: $e');
       rethrow;
     }
   }

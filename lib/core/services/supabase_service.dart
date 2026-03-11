@@ -13,23 +13,15 @@ class SupabaseService {
   SupabaseService._internal();
 
   Future<void> initialize() async {
-    if (_isInitialized) {
-      debugPrint(
-        'SupabaseService: Já inicializado, retornando instância existente',
-      );
-      return;
-    }
+    if (_isInitialized) return;
 
     try {
       // Verifica se o Supabase já está inicializado
       try {
         client = Supabase.instance.client;
         _isInitialized = true;
-        debugPrint('SupabaseService: Usando instância existente do Supabase');
         return;
-      } catch (e) {
-        debugPrint('SupabaseService: Iniciando nova instância do Supabase');
-      }
+      } catch (_) {}
 
       await Supabase.initialize(
         url: 'https://wyrzhjomcvdokocanpjv.supabase.co',
@@ -38,11 +30,7 @@ class SupabaseService {
       );
       client = Supabase.instance.client;
       _isInitialized = true;
-      debugPrint('SupabaseService: Inicializado com sucesso');
-    } catch (e) {
-      debugPrint('SupabaseService: Erro na inicialização: $e');
-      rethrow;
-    }
+    } catch (_) {}
   }
 
   // Métodos de autenticação
@@ -54,10 +42,8 @@ class SupabaseService {
         email: email,
         password: password,
       );
-      debugPrint('SupabaseService: Usuário registrado com sucesso');
       return response;
     } catch (e) {
-      debugPrint('SupabaseService: Erro no registro: $e');
       rethrow;
     }
   }
@@ -70,10 +56,8 @@ class SupabaseService {
         email: email,
         password: password,
       );
-      debugPrint('SupabaseService: Login realizado com sucesso');
       return response;
     } catch (e) {
-      debugPrint('SupabaseService: Erro no login: $e');
       rethrow;
     }
   }
@@ -81,32 +65,16 @@ class SupabaseService {
   Future<void> signOut() async {
     if (!_isInitialized) await initialize();
 
-    try {
-      await client.auth.signOut();
-      debugPrint('SupabaseService: Logout realizado com sucesso');
-    } catch (e) {
-      debugPrint('SupabaseService: Erro no logout: $e');
-      rethrow;
-    }
+    await client.auth.signOut();
   }
 
   User? getCurrentUser() {
-    if (!_isInitialized) {
-      debugPrint(
-        'SupabaseService: Tentativa de acessar usuário antes da inicialização',
-      );
-      return null;
-    }
+    if (!_isInitialized) return null;
     return client.auth.currentUser;
   }
 
   Stream<AuthState> authStateChanges() {
-    if (!_isInitialized) {
-      debugPrint(
-        'SupabaseService: Tentativa de acessar authStateChanges antes da inicialização',
-      );
-      return Stream.empty();
-    }
+    if (!_isInitialized) return Stream.empty();
     return client.auth.onAuthStateChange;
   }
 
@@ -133,15 +101,8 @@ class SupabaseService {
           ''')
           .order('created_at', ascending: false);
 
-      debugPrint('Livros buscados: ${response.length} itens');
-      if (response.isNotEmpty) {
-        debugPrint('Primeiro livro: ${response[0]}');
-        debugPrint('Autor do primeiro livro: ${response[0]['authors']}');
-      }
-
       return _processImageUrls(response, false);
     } catch (e) {
-      debugPrint('Erro ao buscar livros: $e');
       return [];
     }
   }
@@ -160,7 +121,6 @@ class SupabaseService {
               imageUrl.startsWith('https://'))) {
         processedItem['cover_image'] =
             'https://wyrzhjomcvdokocanpjv.supabase.co/storage/v1/object/public/$imageUrl';
-        debugPrint('URL processada: ${processedItem['cover_image']}');
       }
 
       // Processar foto do autor se existir
@@ -188,8 +148,6 @@ class SupabaseService {
 
       return response;
     } catch (e) {
-      debugPrint('Erro ao buscar livro da tabela livros, tentando books: $e');
-
       // Fallback para tabela 'books'
       final response =
           await client.from('books').select('*').eq('id', id).single();
@@ -244,7 +202,6 @@ class SupabaseService {
 
       return {'success': true, 'data': response};
     } catch (e) {
-      debugPrint('Erro ao criar livro: $e');
       return {'success': false, 'error': e.toString()};
     }
   }
@@ -266,7 +223,6 @@ class SupabaseService {
 
       return {'success': true, 'data': response};
     } catch (e) {
-      debugPrint('Erro ao atualizar livro: $e');
       return {'success': false, 'error': e.toString()};
     }
   }
@@ -279,8 +235,6 @@ class SupabaseService {
 
       return response;
     } catch (e) {
-      debugPrint('Erro ao buscar da tabela autores, tentando authors: $e');
-
       // Fallback para tabela 'authors'
       final response = await client.from('authors').select('*').order('name');
 
@@ -297,36 +251,14 @@ class SupabaseService {
           .select('*')
           .order('nome');
 
-      debugPrint(
-        'Categorias encontradas na tabela "categorias": ${response.length}',
-      );
-      if (response.isNotEmpty) {
-        debugPrint('Primeira categoria: ${response[0]}');
-        final imageField = response[0]['URL_da_imagem'] ?? '';
-        debugPrint('Campo de imagem da primeira categoria: $imageField');
-      }
-
       // Processar URLs das imagens
       return _processCategoryImageUrls(response, true);
     } catch (e) {
-      debugPrint(
-        'Erro ao buscar da tabela categorias, tentando categories: $e',
-      );
-
       // Fallback para tabela 'categories'
       final response = await client
           .from('categories')
           .select('*')
           .order('name');
-
-      debugPrint(
-        'Categorias encontradas na tabela "categories": ${response.length}',
-      );
-      if (response.isNotEmpty) {
-        debugPrint('Primeira categoria: ${response[0]}');
-        final imageField = response[0]['image_url'] ?? '';
-        debugPrint('Campo de imagem da primeira categoria: $imageField');
-      }
 
       // Processar URLs das imagens
       return _processCategoryImageUrls(response, false);
@@ -350,7 +282,6 @@ class SupabaseService {
           processedItem[imageField] != null &&
           processedItem[imageField].toString().isNotEmpty) {
         final imageUrl = processedItem[imageField].toString();
-        debugPrint('Processando URL de imagem da categoria: $imageUrl');
 
         // Se não for uma URL completa e for um caminho do storage
         if (!(imageUrl.startsWith('http://') ||
@@ -360,10 +291,6 @@ class SupabaseService {
           final completeUrl =
               'https://wyrzhjomcvdokocanpjv.supabase.co/storage/v1/object/public/$imageUrl';
           processedItem[imageField] = completeUrl;
-
-          debugPrint(
-            'URL de imagem da categoria processada: $imageUrl -> $completeUrl',
-          );
         }
       }
 
@@ -376,8 +303,6 @@ class SupabaseService {
     try {
       final response =
           await client.from('profiles').select('*').eq('id', userId).single();
-
-      debugPrint('Perfil encontrado: $response');
       return response;
     } catch (e) {
       debugPrint('Erro ao buscar perfil do usuário: $e');

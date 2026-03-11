@@ -1,7 +1,6 @@
 import 'package:get/get.dart';
 import '../../../core/services/supabase_service.dart';
 import '../../../core/controllers/auth_controller.dart';
-import 'package:flutter/foundation.dart';
 
 class HomeController extends GetxController {
   final SupabaseService _supabaseService = SupabaseService();
@@ -31,7 +30,6 @@ class HomeController extends GetxController {
     // Adicionar listener para atualizar quando a rota mudar para home
     ever(_currentRoute, (route) {
       if (route == '/home') {
-        debugPrint('Home page acessada novamente - recarregando dados');
         _loadData();
       }
     });
@@ -45,7 +43,6 @@ class HomeController extends GetxController {
     GetObserver routeObserver = GetObserver((Routing? routing) {
       if (routing?.current != null) {
         _currentRoute.value = routing!.current;
-        debugPrint('Rota atual: ${_currentRoute.value}');
       }
     });
 
@@ -54,7 +51,6 @@ class HomeController extends GetxController {
 
   // Método para carregar todos os dados
   Future<void> _loadData() async {
-    debugPrint('Carregando dados da Home');
     loadBooks();
     if (_authController.isAuthenticated) {
       loadBooksInProgress();
@@ -70,17 +66,6 @@ class HomeController extends GetxController {
     _setLoading(true);
     try {
       final books = await _supabaseService.getBooks();
-
-      // Debug: Verificar estrutura dos dados
-      if (books.isNotEmpty) {
-        debugPrint('Estrutura do primeiro livro: ${books[0]}');
-        debugPrint(
-          'Dados do autor do primeiro livro: ${books[0]['autor'] ?? books[0]['author']}',
-        );
-        debugPrint(
-          'ID do autor: ${books[0]['id_do_autor'] ?? books[0]['author_id']}',
-        );
-      }
 
       // Ordenar por ID em ordem decrescente
       books.sort((a, b) => (b['id'] as int).compareTo(a['id'] as int));
@@ -100,9 +85,8 @@ class HomeController extends GetxController {
       final userId = _authController.currentUser!.id;
       final booksInProgress = await _supabaseService.getBooksInProgress(userId);
       _booksInProgress.value = booksInProgress;
-      debugPrint('Livros em progresso carregados: ${booksInProgress.length}');
     } catch (e) {
-      debugPrint('Erro ao carregar livros em progresso: $e');
+      _setError('Erro ao carregar livros em progresso: $e');
     } finally {
       _isLoadingProgress.value = false;
     }

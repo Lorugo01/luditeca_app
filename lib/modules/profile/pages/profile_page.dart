@@ -277,9 +277,4 @@ class ProfilePage extends StatelessWidget {
     );
   }
 
-  int _calculateProgress(Map<String, dynamic> progress) {
-    // Implementar lógica de cálculo de progresso baseado nos dados do progress
-    // Por enquanto retorna 0
-    return 0;
-  }
 }
