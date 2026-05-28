@@ -16,6 +16,33 @@ class Book {
   }
 }
 
+/// Trecho de texto com estilo (import PPTX / rich text).
+class TextContentSpan {
+  final String text;
+  final String? fontWeight;
+  final String? fontStyle;
+  final String? color;
+  final double? fontSize;
+
+  TextContentSpan({
+    required this.text,
+    this.fontWeight,
+    this.fontStyle,
+    this.color,
+    this.fontSize,
+  });
+
+  factory TextContentSpan.fromJson(Map<String, dynamic> json) {
+    return TextContentSpan(
+      text: json['text'] as String? ?? '',
+      fontWeight: json['fontWeight'] as String?,
+      fontStyle: json['fontStyle'] as String?,
+      color: json['color'] as String?,
+      fontSize: (json['fontSize'] as num?)?.toDouble(),
+    );
+  }
+}
+
 class BookElement {
   final String id;
   final String type;
@@ -38,12 +65,35 @@ class BookElement {
   final String? fontStyle;
   final String? color;
   final String? textAlign;
+  final String? textDecoration;
+  final double? lineHeight;
+  final double? letterSpacing;
+  final double? opacity;
+  final String? strokeColor;
+  final double? strokeWidth;
+  final String? shadowColor;
+  final double? shadowBlur;
+  final double? shadowOpacity;
+  final double? shadowOffsetX;
+  final double? shadowOffsetY;
   final String? audio;
+  final Map<String, dynamic>? audioStorage;
   final String? animation;
   final String? textStyle;
   final Position? audioButtonPosition;
+  // Posição livre do badge (percentuais 0-100 dentro da caixa do elemento).
+  final double? audioBadgeXPct;
+  final double? audioBadgeYPct;
+  // Canto de fallback quando não há posição percentual (nw | ne | sw | se).
+  final String? audioBadgePlacement;
+  // Canto sup. esq. do botão em coordenadas da página (ex.: 1280×720), como no editor V2.
+  final double? audioBadgeCanvasX;
+  final double? audioBadgeCanvasY;
+  // Para imagens: 'gif' ativa comportamento de GIF animado.
+  final String? mediaKind;
   final TextData? text;
   final ShapeProperties? shapeProperties;
+  final List<TextContentSpan>? contentSpans;
 
   BookElement({
     required this.id,
@@ -67,12 +117,31 @@ class BookElement {
     this.fontStyle,
     this.color,
     this.textAlign,
+    this.textDecoration,
+    this.lineHeight,
+    this.letterSpacing,
+    this.opacity,
+    this.strokeColor,
+    this.strokeWidth,
+    this.shadowColor,
+    this.shadowBlur,
+    this.shadowOpacity,
+    this.shadowOffsetX,
+    this.shadowOffsetY,
     this.audio,
+    this.audioStorage,
     this.animation,
     this.textStyle,
     this.audioButtonPosition,
+    this.audioBadgeXPct,
+    this.audioBadgeYPct,
+    this.audioBadgePlacement,
+    this.audioBadgeCanvasX,
+    this.audioBadgeCanvasY,
+    this.mediaKind,
     this.text,
     this.shapeProperties,
+    this.contentSpans,
   });
 
   factory BookElement.fromJson(Map<String, dynamic> json) {
@@ -98,17 +167,46 @@ class BookElement {
       fontStyle: json['fontStyle'] ?? json['text']?['fontStyle'],
       color: json['color'],
       textAlign: json['textAlign'] ?? json['text']?['textAlign'],
+      textDecoration: json['textDecoration'],
+      lineHeight: (json['lineHeight'] as num?)?.toDouble(),
+      letterSpacing: (json['letterSpacing'] as num?)?.toDouble(),
+      opacity: (json['opacity'] as num?)?.toDouble(),
+      strokeColor: json['strokeColor'],
+      strokeWidth: (json['strokeWidth'] as num?)?.toDouble(),
+      shadowColor: json['shadowColor'],
+      shadowBlur: (json['shadowBlur'] as num?)?.toDouble(),
+      shadowOpacity: (json['shadowOpacity'] as num?)?.toDouble(),
+      shadowOffsetX: (json['shadowOffsetX'] as num?)?.toDouble(),
+      shadowOffsetY: (json['shadowOffsetY'] as num?)?.toDouble(),
       audio: json['audio'] ?? json['text']?['audio'],
+      audioStorage:
+          json['audioStorage'] is Map
+              ? Map<String, dynamic>.from(json['audioStorage'] as Map)
+              : null,
       animation: json['animation'],
       textStyle: json['textStyle'],
       audioButtonPosition:
           json['text']?['audioButtonPosition'] != null
               ? Position.fromJson(json['text']['audioButtonPosition'])
               : null,
+      audioBadgeXPct: (json['audioBadgeXPct'] as num?)?.toDouble(),
+      audioBadgeYPct: (json['audioBadgeYPct'] as num?)?.toDouble(),
+      audioBadgePlacement: json['audioBadgePlacement'] as String?,
+      audioBadgeCanvasX: (json['audioBadgeCanvasX'] as num?)?.toDouble(),
+      audioBadgeCanvasY: (json['audioBadgeCanvasY'] as num?)?.toDouble(),
+      mediaKind: json['mediaKind'] as String?,
       text: json['text'] != null ? TextData.fromJson(json['text']) : null,
       shapeProperties:
           json['shapeProperties'] != null
               ? ShapeProperties.fromJson(json['shapeProperties'])
+              : null,
+      contentSpans:
+          json['contentSpans'] != null
+              ? (json['contentSpans'] as List)
+                  .map(
+                    (e) => TextContentSpan.fromJson(e as Map<String, dynamic>),
+                  )
+                  .toList()
               : null,
     );
   }
@@ -202,11 +300,43 @@ class BookBackground {
   }
 }
 
+/// Transição entre páginas (ex.: importada do PPTX — `transition` no JSON da página).
+class BookPageTransition {
+  final String type;
+  final int durationMs;
+  final String? direction;
+
+  const BookPageTransition({
+    this.type = 'none',
+    this.durationMs = 500,
+    this.direction,
+  });
+
+  factory BookPageTransition.fromJson(dynamic json) {
+    if (json is! Map) {
+      return const BookPageTransition();
+    }
+    final m = Map<String, dynamic>.from(json);
+    final rawMs = (m['durationMs'] as num?)?.round() ?? 500;
+    final clampedMs = rawMs < 200 ? 200 : (rawMs > 4000 ? 4000 : rawMs);
+    return BookPageTransition(
+      type: m['type'] as String? ?? 'none',
+      durationMs: clampedMs,
+      direction: m['direction'] as String?,
+    );
+  }
+}
+
 class BookPage {
   final String background;
   final List<BookElement> elements;
+  final BookPageTransition pageTransition;
 
-  BookPage({required this.background, required this.elements});
+  BookPage({
+    required this.background,
+    required this.elements,
+    BookPageTransition? pageTransition,
+  }) : pageTransition = pageTransition ?? const BookPageTransition();
 
   factory BookPage.fromJson(Map<String, dynamic> json) {
     final backgroundData = json['background'];
@@ -227,6 +357,7 @@ class BookPage {
           (json['elements'] as List)
               .map((element) => BookElement.fromJson(element))
               .toList(),
+      pageTransition: BookPageTransition.fromJson(json['transition']),
     );
   }
 }

@@ -1,8 +1,15 @@
+import 'dart:async';
+import 'dart:io' show Platform;
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import 'package:get/get.dart';
-import 'core/services/supabase_service.dart';
+import 'core/services/luditeca_api_service.dart';
+import 'core/config/app_env.dart';
+import 'core/config/dev_api_resolver.dart';
 import 'core/theme.dart';
 import 'core/controllers/auth_controller.dart';
 import 'core/controllers/orientation_controller.dart';
@@ -11,7 +18,21 @@ import 'modules/home/pages/home_page.dart';
 import 'modules/library/pages/library_page.dart';
 import 'modules/library/pages/category_books_page.dart';
 import 'modules/library/controllers/library_controller.dart';
+import 'core/preferences/app_preferences_controller.dart';
 import 'routes/app_pages.dart';
+
+Future<void> _logApiReachability() async {
+  final url = '${DevApiResolver.apiBaseUrl}/health';
+  try {
+    final res = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 4));
+    debugPrint('API health: $url -> ${res.statusCode}');
+  } catch (e) {
+    debugPrint(
+      'API inacessivel em $url. No emulador execute: '
+      'adb reverse tcp:3020 tcp:3020 (ou use config "Tablet / IP LAN"). Erro: $e',
+    );
+  }
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -24,10 +45,20 @@ void main() async {
     DeviceOrientation.landscapeRight,
   ]);
 
-  // Inicializar o Supabase e disponibilizar globalmente
-  final supabaseService = SupabaseService();
-  await supabaseService.initialize();
-  Get.put(supabaseService); // Adicionando o serviço ao GetX
+  // Inicializar cliente HTTP/JWT da VPS e disponibilizar globalmente
+  final apiService = LuditecaApiService();
+  await apiService.initialize();
+  Get.put(apiService);
+  debugPrint(
+    'AppEnv: env=${AppEnv.appEnv}; dataSource=${AppEnv.dataSource}; api=${AppEnv.apiBaseUrl}',
+  );
+  if (kDebugMode && !kIsWeb) {
+    try {
+      if (Platform.isAndroid) {
+        unawaited(_logApiReachability());
+      }
+    } catch (_) {}
+  }
 
   // Inicializa os controllers
   AppPages.initControllers();
@@ -71,10 +102,15 @@ class LudiTecaApp extends StatelessWidget {
             'Main: Definindo rota inicial. Autenticado: ${authController.isAuthenticated}',
           );
 
-          return GetMaterialApp(
+          final prefs = Get.find<AppPreferencesController>();
+
+          return Obx(
+            () => GetMaterialApp(
             title: 'LudiTeca',
-            theme: AppTheme.lightTheme,
+            theme: AppTheme.forId(prefs.appThemeId.value),
             debugShowCheckedModeBanner: false,
+            defaultTransition: Transition.fadeIn,
+            transitionDuration: const Duration(milliseconds: 180),
             home:
                 authController.isAuthenticated
                     ? const HomePage()
@@ -99,6 +135,7 @@ class LudiTecaApp extends StatelessWidget {
               name: '/login',
               page: () => const LoginPage(),
             ),
+          ),
           );
         },
       ),

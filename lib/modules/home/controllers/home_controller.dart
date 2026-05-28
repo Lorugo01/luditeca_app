@@ -1,9 +1,11 @@
 import 'package:get/get.dart';
-import '../../../core/services/supabase_service.dart';
+import '../../../core/services/luditeca_api_service.dart';
 import '../../../core/controllers/auth_controller.dart';
 
 class HomeController extends GetxController {
-  final SupabaseService _supabaseService = SupabaseService();
+  static bool _routeObserverRegistered = false;
+
+  final LuditecaApiService _apiService = LuditecaApiService();
   final AuthController _authController = Get.find<AuthController>();
 
   final RxList<Map<String, dynamic>> _books = <Map<String, dynamic>>[].obs;
@@ -39,14 +41,17 @@ class HomeController extends GetxController {
   }
 
   void _setupRouteObserver() {
-    // Atualiza a rota atual quando ela muda
-    GetObserver routeObserver = GetObserver((Routing? routing) {
-      if (routing?.current != null) {
-        _currentRoute.value = routing!.current;
-      }
-    });
+    if (_routeObserverRegistered) return;
+    _routeObserverRegistered = true;
 
-    Get.put(routeObserver);
+    Get.put(
+      GetObserver((Routing? routing) {
+        if (routing?.current != null) {
+          _currentRoute.value = routing!.current;
+        }
+      }),
+      permanent: true,
+    );
   }
 
   // Método para carregar todos os dados
@@ -65,7 +70,7 @@ class HomeController extends GetxController {
   Future<void> loadBooks() async {
     _setLoading(true);
     try {
-      final books = await _supabaseService.getBooks();
+      final books = await _apiService.getBooks();
 
       // Ordenar por ID em ordem decrescente
       books.sort((a, b) => (b['id'] as int).compareTo(a['id'] as int));
@@ -82,8 +87,8 @@ class HomeController extends GetxController {
 
     _isLoadingProgress.value = true;
     try {
-      final userId = _authController.currentUser!.id;
-      final booksInProgress = await _supabaseService.getBooksInProgress(userId);
+      final userId = _authController.currentUser!['id'].toString();
+      final booksInProgress = await _apiService.getBooksInProgress(userId);
       _booksInProgress.value = booksInProgress;
     } catch (e) {
       _setError('Erro ao carregar livros em progresso: $e');

@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import '../../../core/services/luditeca_api_service.dart';
 
 class ProfileController extends GetxController {
-  final supabase = Supabase.instance.client;
+  final LuditecaApiService _service = LuditecaApiService();
   final RxMap<String, dynamic> userProfile = RxMap<String, dynamic>();
   final RxBool isLoading = false.obs;
   final RxString error = ''.obs;
@@ -34,14 +34,12 @@ class ProfileController extends GetxController {
       isLoading.value = true;
       error.value = '';
 
-      final userId = supabase.auth.currentUser?.id;
+      final userId = _service.currentUser?['id']?.toString();
       if (userId == null) {
         error.value = 'Usuário não autenticado';
         return;
       }
-
-      final response =
-          await supabase.from('profiles').select('*').eq('id', userId).single();
+      final response = await _service.getUserProfile(userId) ?? {};
 
       userProfile.assignAll(response);
 
@@ -75,15 +73,12 @@ class ProfileController extends GetxController {
       isLoading.value = true;
       error.value = '';
 
-      final userId = supabase.auth.currentUser?.id;
+      final userId = _service.currentUser?['id']?.toString();
       if (userId == null) {
         error.value = 'Usuário não autenticado';
         return;
       }
-
-      final updates = {'name': name, if (iconeUrl != null) 'icone': iconeUrl};
-
-      await supabase.from('profiles').update(updates).eq('id', userId);
+      await _service.updateMyProfile(name: name, iconeUrl: iconeUrl);
 
       await loadUserProfile();
 
@@ -152,7 +147,7 @@ class ProfileController extends GetxController {
     try {
       isLoading.value = true;
       error.value = '';
-      final userId = supabase.auth.currentUser?.id;
+      final userId = _service.currentUser?['id']?.toString();
       if (userId == null) {
         error.value = 'Usuário não autenticado';
         return;
@@ -160,16 +155,10 @@ class ProfileController extends GetxController {
       final String fileName = 'profile_$userId.jpg';
       final file = File(filePath);
       final bytes = await file.readAsBytes();
-      await supabase.storage
-          .from('profile')
-          .uploadBinary(
-            fileName,
-            bytes,
-            fileOptions: const FileOptions(upsert: true),
-          );
-      final String publicUrl = supabase.storage
-          .from('profile')
-          .getPublicUrl(fileName);
+      final String publicUrl = await _service.uploadAvatar(
+        bytes: bytes,
+        fileName: fileName,
+      );
       await updateProfile(name: userName.value, iconeUrl: publicUrl);
       Get.snackbar(
         'Sucesso',
@@ -207,29 +196,19 @@ class ProfileController extends GetxController {
       isLoading.value = true;
       error.value = '';
 
-      final userId = supabase.auth.currentUser?.id;
+      final userId = _service.currentUser?['id']?.toString();
       if (userId == null) {
         error.value = 'Usuário não autenticado';
         return;
       }
 
-      // Upload da imagem para o storage do Supabase (bucket 'profile')
       final String fileName = 'profile_$userId.jpg';
       final file = File(image.path);
       final bytes = await file.readAsBytes();
-
-      await supabase.storage
-          .from('profile')
-          .uploadBinary(
-            fileName,
-            bytes,
-            fileOptions: const FileOptions(upsert: true),
-          );
-
-      // Obtém a URL pública da imagem
-      final String publicUrl = supabase.storage
-          .from('profile')
-          .getPublicUrl(fileName);
+      final String publicUrl = await _service.uploadAvatar(
+        bytes: bytes,
+        fileName: fileName,
+      );
 
       // Atualiza o perfil com a nova URL na coluna 'icone'
       await updateProfile(name: userName.value, iconeUrl: publicUrl);
@@ -257,7 +236,7 @@ class ProfileController extends GetxController {
 
   Future<void> signOut() async {
     try {
-      await supabase.auth.signOut();
+      await _service.signOut();
       Get.offAllNamed('/login');
     } catch (e) {
       error.value = 'Erro ao fazer logout: $e';
@@ -273,10 +252,6 @@ class ProfileController extends GetxController {
 
   Future<List<Map<String, dynamic>>> fetchBooksReadHistory() async {
     if (booksReadHistory.isEmpty) return [];
-    final response = await supabase
-        .from('books')
-        .select('*')
-        .inFilter('id', booksReadHistory);
-    return List<Map<String, dynamic>>.from(response);
+    return _service.fetchBooksByIds(booksReadHistory);
   }
 }

@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../../../core/layout/app_layout_tokens.dart';
 import '../../../core/models/category_model.dart';
-import '../../../widgets/responsive_navigation.dart';
+import '../../../widgets/app_shell_layout.dart';
 import '../../../widgets/book_card.dart';
 import '../controllers/category_books_controller.dart';
 
@@ -12,21 +13,20 @@ class CategoryBooksPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final orientation = MediaQuery.of(context).orientation;
     final controller = Get.put(CategoryBooksController(category: category));
 
-    return Scaffold(
+    return AppShellLayout(
       appBar: AppBar(
         title: Text(category.name),
-        backgroundColor: Colors.transparent,
+        backgroundColor: AppLayoutTokens.scaffoldBackground,
+        foregroundColor: AppLayoutTokens.textPrimary,
         elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Get.back(),
+        ),
       ),
-      body: Row(
-        children: [
-          if (orientation == Orientation.landscape)
-            const ResponsiveNavigation(),
-          Expanded(
-            child: Obx(() {
+      body: Obx(() {
               if (controller.isLoading.value) {
                 return const Center(child: CircularProgressIndicator());
               }
@@ -99,13 +99,6 @@ class CategoryBooksPage extends StatelessWidget {
                 ),
               );
             }),
-          ),
-        ],
-      ),
-      bottomNavigationBar:
-          orientation == Orientation.portrait
-              ? const ResponsiveNavigation()
-              : null,
     );
   }
 }

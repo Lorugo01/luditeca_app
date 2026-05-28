@@ -1,15 +1,13 @@
 import 'package:get/get.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/models/book_model.dart';
 import '../../../core/models/category_model.dart';
-import '../../../core/services/supabase_service.dart';
+import '../../../core/services/luditeca_api_service.dart';
 import 'package:flutter/foundation.dart';
 import '../../favorites/controllers/favorites_controller.dart';
 
 class CategoryBooksController extends GetxController {
-  final SupabaseService _supabaseService = Get.find<SupabaseService>();
+  final LuditecaApiService _apiService = Get.find<LuditecaApiService>();
   final CategoryModel category;
-  final supabase = Supabase.instance.client;
   final favoritesController = Get.find<FavoritesController>();
 
   CategoryBooksController({required this.category});
@@ -32,17 +30,12 @@ class CategoryBooksController extends GetxController {
       debugPrint('=== Iniciando busca de livros ===');
       debugPrint('Categoria: ID=${category.id}, Nome=${category.name}');
 
-      // Query modificada para garantir o filtro correto por categoria
-      final response = await _supabaseService.client
-          .from('books')
-          .select('*, categories!inner(*)')
-          .eq('categories.id', category.id)
-          .order('title');
+      final response = await _apiService.getBooksByCategory(category.id);
 
-      debugPrint('Resposta bruta do Supabase: $response');
+      debugPrint('Resposta bruta da API VPS: $response');
 
       if (response.isEmpty) {
-        debugPrint('Lista vazia retornada do Supabase');
+        debugPrint('Lista vazia retornada da API VPS');
         books.value = [];
         return;
       }

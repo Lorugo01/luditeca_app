@@ -1,19 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import '../services/supabase_service.dart';
+import '../services/luditeca_api_service.dart';
 
 class AuthController extends GetxController {
-  final SupabaseService _supabaseService = SupabaseService();
+  final LuditecaApiService _apiService = LuditecaApiService();
 
   final RxBool _isLoading = false.obs;
   final RxString _error = ''.obs;
-  final Rx<User?> _currentUser = Rx<User?>(null);
+  final Rx<Map<String, dynamic>?> _currentUser = Rx<Map<String, dynamic>?>(null);
   final RxBool _initialLoadCompleted = false.obs;
 
   bool get isLoading => _isLoading.value;
   String? get error => _error.value.isEmpty ? null : _error.value;
-  User? get currentUser => _currentUser.value;
+  Map<String, dynamic>? get currentUser => _currentUser.value;
   bool get isAuthenticated => _currentUser.value != null;
   bool get initialLoadCompleted => _initialLoadCompleted.value;
 
@@ -21,23 +20,11 @@ class AuthController extends GetxController {
   void onInit() {
     super.onInit();
     _loadCurrentUser();
-    _setupAuthListener();
   }
 
   void _loadCurrentUser() {
-    _currentUser.value = _supabaseService.getCurrentUser();
+    _currentUser.value = _apiService.getCurrentUser();
     _initialLoadCompleted.value = true;
-  }
-
-  void _setupAuthListener() {
-    _supabaseService.authStateChanges().listen((state) {
-      if (state.event == AuthChangeEvent.signedIn ||
-          state.event == AuthChangeEvent.userUpdated) {
-        _currentUser.value = state.session?.user;
-      } else if (state.event == AuthChangeEvent.signedOut) {
-        _currentUser.value = null;
-      }
-    });
   }
 
   Future<bool> signIn(String email, String password) async {
@@ -45,15 +32,11 @@ class AuthController extends GetxController {
     _isLoading.value = true;
 
     try {
-      final response = await _supabaseService.signIn(email, password);
-      _currentUser.value = response.user;
+      final response = await _apiService.signIn(email, password);
+      _currentUser.value = Map<String, dynamic>.from(response['user'] as Map);
       _isLoading.value = false;
 
       return true;
-    } on AuthException catch (e) {
-      _error.value = _getAuthErrorMessage(e);
-      _isLoading.value = false;
-      return false;
     } catch (e) {
       _error.value = 'Erro inesperado: $e';
       _isLoading.value = false;
@@ -66,15 +49,10 @@ class AuthController extends GetxController {
     _isLoading.value = true;
 
     try {
-      final response = await _supabaseService.signUp(email, password);
-      _currentUser.value = response.user;
+      final response = await _apiService.signUp(email, password);
+      _currentUser.value = Map<String, dynamic>.from(response['user'] as Map);
       _isLoading.value = false;
-      return response.session != null;
-    } on AuthException catch (e) {
-      _error.value = _getAuthErrorMessage(e);
-      _isLoading.value = false;
-      debugPrint('AuthController: Erro no registro: ${_error.value}');
-      return false;
+      return response['session'] != null;
     } catch (e) {
       _error.value = 'Erro inesperado: $e';
       _isLoading.value = false;
@@ -90,7 +68,7 @@ class AuthController extends GetxController {
     _isLoading.value = true;
 
     try {
-      await _supabaseService.signOut();
+      await _apiService.signOut();
       _currentUser.value = null;
       _isLoading.value = false;
       return true;
@@ -112,24 +90,19 @@ class AuthController extends GetxController {
       // Decodificar o QR code (assumindo que contém um token JWT)
       final token = _decodeQRCode(qrCodeData);
       if (token == null) {
-        throw AuthException('QR Code inválido');
+        throw Exception('QR Code inválido');
       }
 
       // Autenticar com o token
-      final response = await _supabaseService.signInWithToken(token);
-      _currentUser.value = response.user;
+      final response = await _apiService.signInWithToken(token);
+      _currentUser.value = Map<String, dynamic>.from(response['user'] as Map);
       _isLoading.value = false;
 
       debugPrint(
-        'AuthController: Login com QR Code bem sucedido para: ${_currentUser.value?.email}',
+        'AuthController: Login com QR Code bem sucedido para: ${_currentUser.value?['email']}',
       );
 
       return true;
-    } on AuthException catch (e) {
-      _error.value = _getAuthErrorMessage(e);
-      _isLoading.value = false;
-      debugPrint('AuthController: Erro no login com QR Code: ${_error.value}');
-      return false;
     } catch (e) {
       _error.value = 'Erro ao processar QR Code: $e';
       _isLoading.value = false;
@@ -155,23 +128,6 @@ class AuthController extends GetxController {
     } catch (e) {
       debugPrint('AuthController: Erro ao decodificar QR Code: $e');
       return null;
-    }
-  }
-
-  String _getAuthErrorMessage(AuthException e) {
-    switch (e.message) {
-      case 'Invalid login credentials':
-        return 'Email ou senha inválidos';
-      case 'Email not confirmed':
-        return 'Email não confirmado';
-      case 'User already registered':
-        return 'Usuário já registrado';
-      case 'Password should be at least 6 characters':
-        return 'A senha deve ter pelo menos 6 caracteres';
-      case 'Invalid email':
-        return 'Email inválido';
-      default:
-        return 'Erro de autenticação: ${e.message}';
     }
   }
 

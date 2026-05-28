@@ -1,15 +1,11 @@
-import 'dart:io';
-
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import '../../reader/pages/reader_page.dart';
-import '../../reader/pages/reader_webview_page.dart';
+import '../../reader/utils/reading_progress_helper.dart';
+import '../../../core/layout/app_layout_tokens.dart';
 import '../../../core/models/book_model.dart';
 import '../../favorites/controllers/favorites_controller.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../../core/services/supabase_service.dart';
-
+import '../../../core/services/luditeca_api_service.dart';
 class BookDetailsPage extends StatefulWidget {
   final Map<String, dynamic> book;
 
@@ -72,9 +68,8 @@ class _BookDetailsPageState extends State<BookDetailsPage>
     // Se já existe cache, não faz nada
     if (prefs.containsKey(cacheKey)) return;
     try {
-      // Buscar do SupabaseService
-      final supabaseService = SupabaseService();
-      final response = await supabaseService.getBookById(bookId);
+      final apiService = LuditecaApiService();
+      final response = await apiService.getBookById(bookId);
       if (response != null && response['pages'] != null) {
         // Salvar em cache local
         await prefs.setString(cacheKey, response['pages'].toString());
@@ -117,39 +112,16 @@ class _BookDetailsPageState extends State<BookDetailsPage>
     setState(() => _isFlipping = true);
     await _flipController.forward();
     await Future.delayed(const Duration(milliseconds: 200));
-    _navigateWithTransition();
-    setState(() => _isFlipping = false);
-    _flipController.reset();
+    await _navigateWithTransition();
+    if (mounted) {
+      setState(() => _isFlipping = false);
+      _flipController.reset();
+    }
   }
 
-  void _navigateWithTransition() {
-    final slidebookUrl = bookModel.slidebookLink;
-
-    final canUseWebView =
-        kIsWeb ||
-        (Platform.isAndroid || Platform.isIOS);
-
-    if (slidebookUrl != null &&
-        slidebookUrl.isNotEmpty &&
-        canUseWebView) {
-      Get.to(
-        () => ReaderWebViewPage(slidebookUrl: slidebookUrl),
-        transition: Transition.fadeIn,
-        duration: const Duration(milliseconds: 500),
-        curve: Curves.easeInOut,
-      );
-    } else {
-      Get.to(
-        () => ReaderPage(
-          bookId: widget.book['id'].toString(),
-          initialPage: null,
-          initialStep: 0,
-        ),
-        transition: Transition.fadeIn,
-        duration: const Duration(milliseconds: 500),
-        curve: Curves.easeInOut,
-      );
-    }
+  Future<void> _navigateWithTransition() async {
+    final saved = await ReadingProgressHelper.getPosition(bookModel.id);
+    await openBookForReading(widget.book, position: saved);
   }
 
   @override
@@ -163,6 +135,9 @@ class _BookDetailsPageState extends State<BookDetailsPage>
     if (widget.book['authors'] != null && widget.book['authors'] is Map) {
       authorName = widget.book['authors']['name'] ?? 'Autor desconhecido';
     }
+
+    final ageRange = bookModel.ageRange ??
+        (widget.book['age_range'] ?? widget.book['ageRange'])?.toString().trim();
 
     final textColor = Colors.black87;
 
@@ -390,6 +365,29 @@ class _BookDetailsPageState extends State<BookDetailsPage>
                 authorName,
                 style: TextStyle(fontSize: 18, color: textColor.withAlpha(200)),
               ),
+              if (ageRange != null && ageRange.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.child_care_outlined,
+                      size: 20,
+                      color: AppLayoutTokens.primary,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Faixa etária: $ageRange',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: textColor.withAlpha(220),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
               const SizedBox(height: 24),
               // Descrição
               Text(

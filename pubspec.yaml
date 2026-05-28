@@ -43,7 +43,6 @@ dependencies:
   flutter_svg: ^2.0.7
   google_fonts: ^5.0.0
   shared_preferences: ^2.2.0
-  supabase_flutter: ^2.3.4
   http: ^1.2.0
   # QR code scanner
   mobile_scanner: ^3.5.6
@@ -55,12 +54,14 @@ dependencies:
   palette_generator: ^0.3.3
   archive: ^3.4.10
   logger: ^2.0.2
-  flutter_launcher_icons: ^0.14.3
   # flutter_windowmanager: ^0.2.0  # Removido pois está causando problemas
   image_picker: ^1.0.7
   file_picker: 10.1.0
   auto_size_text: ^3.0.0
   webview_flutter: ^4.8.0
+  syncfusion_flutter_pdfviewer: ^27.1.48
+  epub_view: ^3.2.0
+  flutter_tts: ^4.2.0
 
 
 dev_dependencies:
@@ -73,6 +74,8 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^5.0.0
+  # flutter_launcher_icons: ^0.14.3
+  # (re-adicionar pontualmente quando for preciso regenerar ícones — conflita com a árvore de `image` exigida por epub_view/epubx)
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -87,6 +90,7 @@ flutter:
 
   # To add assets to your application, add an assets section, like this:
   assets:
+    - .env
     - assets/images/
     - assets/audios/
     - assets/images/page1.png

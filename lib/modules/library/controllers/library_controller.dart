@@ -1,52 +1,90 @@
 import 'package:get/get.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/models/book_model.dart';
-import '../../../core/models/category_model.dart';
-import '../pages/category_books_page.dart';
-import '../controllers/category_books_controller.dart';
+import '../../../core/services/luditeca_api_service.dart';
 import '../../favorites/controllers/favorites_controller.dart';
+import '../../book/pages/book_details_page.dart';
+
+enum LibraryBookFilter { all, animated, interactive, digital }
 
 class LibraryController extends GetxController {
-  final supabase = Supabase.instance.client;
-  final RxList<CategoryModel> categories = <CategoryModel>[].obs;
+  final LuditecaApiService _api = LuditecaApiService();
+  final favoritesController = Get.find<FavoritesController>();
+
+  final RxList<BookModel> allBooks = <BookModel>[].obs;
   final RxBool isLoading = false.obs;
   final RxString error = ''.obs;
-  final favoritesController = Get.find<FavoritesController>();
+  final RxString searchQuery = ''.obs;
+  final Rx<LibraryBookFilter> activeFilter = LibraryBookFilter.all.obs;
+
+  static const int booksPerShelf = 6;
 
   @override
   void onInit() {
     super.onInit();
-    loadCategories();
+    loadBooks();
   }
 
-  Future<void> loadCategories() async {
+  Future<void> loadBooks() async {
     try {
       isLoading.value = true;
       error.value = '';
-
-      final response = await supabase.from('categories').select().order('name');
-
-      categories.value =
-          (response as List)
-              .map((json) => CategoryModel.fromJson(json))
-              .toList();
+      final response = await _api.getBooks();
+      allBooks.value = response
+          .map((json) => BookModel.fromJson(json))
+          .where((b) => b.title.trim().isNotEmpty)
+          .toList();
     } catch (e) {
-      error.value = 'Erro ao carregar categorias: $e';
+      error.value = 'Erro ao carregar livros: $e';
     } finally {
       isLoading.value = false;
     }
   }
 
-  void navigateToCategoryBooks(CategoryModel category) {
-    if (Get.isRegistered<CategoryBooksController>(
-      tag: category.id.toString(),
-    )) {
-      Get.delete<CategoryBooksController>(tag: category.id.toString());
+  List<BookModel> get filteredBooks {
+    final q = searchQuery.value.trim().toLowerCase();
+    return allBooks.where((book) {
+      if (!_matchesFilter(book)) return false;
+      if (q.isEmpty) return true;
+      final title = book.title.toLowerCase();
+      final author = (book.author ?? '').toLowerCase();
+      final desc = (book.description ?? '').toLowerCase();
+      return title.contains(q) || author.contains(q) || desc.contains(q);
+    }).toList();
+  }
+
+  List<List<BookModel>> get bookShelves {
+    final books = filteredBooks;
+    final shelves = <List<BookModel>>[];
+    for (var i = 0; i < books.length; i += booksPerShelf) {
+      final end = (i + booksPerShelf > books.length) ? books.length : i + booksPerShelf;
+      shelves.add(books.sublist(i, end));
     }
-    Get.to(
-      () => CategoryBooksPage(category: category),
-      transition: Transition.rightToLeft,
-    );
+    return shelves;
+  }
+
+  bool _matchesFilter(BookModel book) {
+    switch (activeFilter.value) {
+      case LibraryBookFilter.animated:
+        return book.kind == BookKind.animated || book.kind == BookKind.legacy;
+      case LibraryBookFilter.interactive:
+        return book.kind == BookKind.interactive;
+      case LibraryBookFilter.digital:
+        return book.kind == BookKind.digital;
+      case LibraryBookFilter.all:
+        return true;
+    }
+  }
+
+  void setFilter(LibraryBookFilter filter) {
+    activeFilter.value = filter;
+  }
+
+  void setSearch(String value) {
+    searchQuery.value = value;
+  }
+
+  void openBook(BookModel book) {
+    Get.to(() => BookDetailsPage(book: book.toJson()));
   }
 
   void toggleFavorite(BookModel book) {

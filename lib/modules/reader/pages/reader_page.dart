@@ -7,9 +7,12 @@ import '../models/book_element.dart';
 import 'package:animate_do/animate_do.dart';
 import '../widgets/image_element_widget.dart';
 import '../widgets/shape_element_widget.dart';
+import '../widgets/reader_rich_text.dart';
+import '../widgets/reader_page_transition.dart';
+import '../widgets/audio_button_widget.dart';
+import '../widgets/audio_badge_layout.dart';
 import '../../../core/controllers/auth_controller.dart';
-import '../../../core/services/supabase_service.dart';
-import 'package:auto_size_text/auto_size_text.dart';
+import '../../../core/services/luditeca_api_service.dart';
 
 // Dimensões do canvas (ex: 1280x720 para 16:9)
 const double canvasWidth = 1280;
@@ -43,7 +46,7 @@ class _ReaderPageState extends State<ReaderPage> {
   late double offsetX;
   late double offsetY;
   final Map<String, AudioPlayer> _audioPlayers = {};
-  final SupabaseService _supabaseService = SupabaseService();
+  final LuditecaApiService _apiService = LuditecaApiService();
   final AuthController _authController = Get.find<AuthController>();
 
   bool _autoPlay = false;
@@ -187,62 +190,77 @@ class _ReaderPageState extends State<ReaderPage> {
       return child;
     }
 
-    switch (element.animation) {
-      case 'animate__fadeIn':
+    final anim = _normalizeAnimationName(element.animation);
+    switch (anim) {
+      case 'fadein':
         return FadeIn(
           duration: const Duration(milliseconds: 500),
           child: child,
         );
-      case 'animate__fadeInUp':
+      case 'fadeinup':
         return FadeInUp(
           duration: const Duration(milliseconds: 500),
           child: child,
         );
-      case 'animate__fadeInDown':
+      case 'fadeindown':
         return FadeInDown(
           duration: const Duration(milliseconds: 500),
           child: child,
         );
-      case 'animate__fadeInLeft':
+      case 'fadeinleft':
         return FadeInLeft(
           duration: const Duration(milliseconds: 500),
           child: child,
         );
-      case 'animate__fadeInRight':
+      case 'fadeinright':
         return FadeInRight(
           duration: const Duration(milliseconds: 500),
           child: child,
         );
-      case 'animate__zoomIn':
+      case 'zoomin':
         return ZoomIn(
           duration: const Duration(milliseconds: 500),
           child: child,
         );
-      case 'animate__bounce':
+      case 'bounce':
         return ElasticIn(
           duration: const Duration(milliseconds: 500),
           child: child,
         );
-      case 'animate__pulse':
+      case 'pulse':
         return Pulse(duration: const Duration(milliseconds: 500), child: child);
-      case 'animate__rubberBand':
+      case 'rubberband':
         return RubberBand(
           duration: const Duration(milliseconds: 500),
           child: child,
         );
-      case 'animate__slideInLeft':
+      case 'slideinleft':
         return SlideInLeft(
           duration: const Duration(milliseconds: 500),
           child: child,
         );
-      case 'animate__slideInRight':
+      case 'slideinright':
         return SlideInRight(
+          duration: const Duration(milliseconds: 500),
+          child: child,
+        );
+      case 'flash':
+        return Flash(
           duration: const Duration(milliseconds: 500),
           child: child,
         );
       default:
         return child;
     }
+  }
+
+  String _normalizeAnimationName(String? raw) {
+    if (raw == null || raw.trim().isEmpty) return '';
+    var v = raw.trim().toLowerCase();
+    if (v.startsWith('animate__')) {
+      v = v.substring('animate__'.length);
+    }
+    return v.replaceAll(RegExp(r'[^a-z0-9]'), '');
   }
 
   Widget _buildElement(BookElement element) {
@@ -267,145 +285,146 @@ class _ReaderPageState extends State<ReaderPage> {
         break;
 
       case 'text':
+        // textStyle não-nulo e diferente de 'normal' ativa o balão branco.
+        // Para elementos V2 sem textStyle definido, o fundo deve ser transparente.
+        final hasBubble =
+            element.textStyle != null && element.textStyle != 'normal';
+        // Largura da caixa do nó (igual ao editor).
+        final textBoxW = element.size.width * scale;
         elementWidget = ConstrainedBox(
           constraints: BoxConstraints(
-            minWidth: element.size.width * scale,
-            maxWidth: element.size.width * scale,
-            // O máximo da altura será o limite da tela menos margens
+            minWidth: textBoxW,
+            maxWidth: textBoxW,
             maxHeight: MediaQuery.of(context).size.height * 0.8,
           ),
-          child: Container(
-            // Remover height fixa
-            // height: element.size.height,
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color:
-                  element.textStyle == 'normal'
-                      ? Colors.transparent
-                      : Colors.white,
-              borderRadius:
-                  element.textStyle == 'thought'
-                      ? BorderRadius.circular(
-                        element.size.width / 2,
-                      ) // Círculo para pensamento
-                      : BorderRadius.circular(
-                        8,
-                      ), // Bordas arredondadas para outros estilos
-              border:
-                  element.textStyle != 'normal'
-                      ? Border.all(color: Colors.grey.shade300)
-                      : null,
-              boxShadow:
-                  element.textStyle != 'normal'
-                      ? [
-                        BoxShadow(
-                          color: Colors.black.withAlpha(20),
-                          blurRadius: 10,
-                          offset: const Offset(0, 2),
-                        ),
-                      ]
-                      : null,
-            ),
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                // Texto com AutoSizeText para adaptação automática
-                Padding(
-                  padding: const EdgeInsets.all(4),
-                  child: AutoSizeText(
-                    element.content ?? '',
-                    style: TextStyle(
-                      fontSize: element.fontSize?.toDouble() ?? 16,
-                      fontFamily: element.fontFamily ?? 'Roboto',
-                      fontWeight:
-                          element.fontWeight == 'bold'
-                              ? FontWeight.bold
-                              : FontWeight.normal,
-                      fontStyle:
-                          element.fontStyle == 'italic'
-                              ? FontStyle.italic
-                              : FontStyle.normal,
-                      color:
-                          element.color != null
-                              ? Color(
-                                int.parse(
-                                  element.color!.replaceAll('#', '0xFF'),
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Positioned.fill(
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: hasBubble ? Colors.white : Colors.transparent,
+                    borderRadius:
+                        element.textStyle == 'thought'
+                            ? BorderRadius.circular(element.size.width / 2)
+                            : BorderRadius.circular(8),
+                    border:
+                        hasBubble
+                            ? Border.all(color: Colors.grey.shade300)
+                            : null,
+                    boxShadow:
+                        hasBubble
+                            ? [
+                              BoxShadow(
+                                color: Colors.black.withAlpha(20),
+                                blurRadius: 10,
+                                offset: const Offset(0, 2),
+                              ),
+                            ]
+                            : null,
+                  ),
+                  child: LayoutBuilder(
+                    builder: (context, cons) {
+                      final audio = element.audio?.trim();
+                      final badgeOff = AudioBadgeLayout.outsideTopLeftFromElement(
+                        element,
+                        cons.maxWidth,
+                        cons.maxHeight,
+                      );
+                      return Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.all(4),
+                            child: buildReaderAutoSizeText(
+                              element,
+                              maxLines: null,
+                              minFontSize: 8,
+                              overflow: TextOverflow.visible,
+                            ),
+                          ),
+
+                          // Indicador de fala (seta)
+                          if (element.textStyle == 'speech')
+                            Positioned(
+                              left: -8,
+                              bottom: -8,
+                              child: Transform.rotate(
+                                angle: -0.785398, // -45 graus em radianos
+                                child: Container(
+                                  width: 16,
+                                  height: 16,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    border: Border(
+                                      bottom: BorderSide(
+                                        color: Colors.grey.shade300,
+                                      ),
+                                      right: BorderSide(
+                                        color: Colors.grey.shade300,
+                                      ),
+                                    ),
+                                  ),
                                 ),
-                              )
-                              : Colors.black,
-                    ),
-                    textAlign:
-                        element.textAlign == 'center'
-                            ? TextAlign.center
-                            : element.textAlign == 'right'
-                            ? TextAlign.right
-                            : TextAlign.left,
-                    minFontSize: 8, // Tamanho mínimo da fonte
-                    maxLines: null, // Permite linhas ilimitadas
-                    overflow: TextOverflow.visible, // Não corta o texto
+                              ),
+                            ),
+
+                          // Indicador de pensamento (bolhas)
+                          if (element.textStyle == 'thought')
+                            Positioned(
+                              left: -12,
+                              bottom: -12,
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 12,
+                                    height: 12,
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: Colors.grey.shade300,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Container(
+                                    width: 8,
+                                    height: 8,
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: Colors.grey.shade300,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                          if (audio != null && audio.isNotEmpty)
+                            Positioned(
+                              left: badgeOff.dx,
+                              top: badgeOff.dy,
+                              child: Opacity(
+                                opacity:
+                                    (element.opacity ?? 1).clamp(0.0, 1.0),
+                                child: AudioButtonWidget(
+                                  audioUrl: audio,
+                                  audioPlayers: _audioPlayers,
+                                  elementId: element.id,
+                                ),
+                              ),
+                            ),
+                        ],
+                      );
+                    },
                   ),
                 ),
-
-                // Indicador de fala (seta)
-                if (element.textStyle == 'speech')
-                  Positioned(
-                    left: -8,
-                    bottom: -8,
-                    child: Transform.rotate(
-                      angle: -0.785398, // -45 graus em radianos
-                      child: Container(
-                        width: 16,
-                        height: 16,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          border: Border(
-                            bottom: BorderSide(color: Colors.grey.shade300),
-                            right: BorderSide(color: Colors.grey.shade300),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-
-                // Indicador de pensamento (bolhas)
-                if (element.textStyle == 'thought')
-                  Positioned(
-                    left: -12,
-                    bottom: -12,
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 12,
-                          height: 12,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.grey.shade300),
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        Container(
-                          width: 8,
-                          height: 8,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.grey.shade300),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                // Botão de áudio
-                if (element.audio != null && element.audio!.isNotEmpty)
-                  Positioned(
-                    left: element.audioButtonPosition?.x ?? -48,
-                    top: element.audioButtonPosition?.y ?? 0,
-                    child: _buildAudioButton(element),
-                  ),
-              ],
-            ),
+              ),
+            ],
           ),
         );
         break;
@@ -414,59 +433,48 @@ class _ReaderPageState extends State<ReaderPage> {
         elementWidget = const SizedBox.shrink();
     }
 
+    // Aplica rotação ao elemento quando definida
+    final rotation = element.rotation;
+    if (rotation != null && rotation != 0) {
+      elementWidget = Transform.rotate(
+        angle: rotation * (3.14159265358979 / 180.0),
+        child: elementWidget,
+      );
+    }
+
     return _buildAnimatedElement(element, elementWidget);
   }
 
-  Widget _buildAudioButton(BookElement element) {
-    return GestureDetector(
-      onTap: () async {
-        try {
-          // Inicializar o player se ainda não existir
-          if (!_audioPlayers.containsKey(element.id)) {
-            final player = AudioPlayer();
-            _audioPlayers[element.id] = player;
-            await player.setUrl(element.audio!);
-          }
-
-          final player = _audioPlayers[element.id]!;
-
-          // Parar todos os outros players
-          for (var otherPlayer in _audioPlayers.values) {
-            if (otherPlayer != player) {
-              await otherPlayer.pause();
-            }
-          }
-
-          // Toggle play/pause
-          if (player.playing) {
-            await player.pause();
-          } else {
-            await player.play();
-          }
-        } catch (e) {
-          debugPrint('Erro ao manipular áudio: $e');
-        }
-      },
-      child: Container(
-        width: 40,
-        height: 40,
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: Colors.black.withAlpha(128),
-          borderRadius: BorderRadius.circular(20),
+  /// Canvas da página (fundo + elementos) em coordenadas relativas ao retângulo 1280×720 escalado.
+  Widget _buildPageCanvasStack(
+    BookPage page,
+    List<BookElement> visibleElements,
+  ) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Positioned.fill(
+          child:
+              page.background.isEmpty
+                  ? ColoredBox(color: Colors.grey.shade300)
+                  : Image.network(
+                    page.background,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return ColoredBox(color: Colors.grey.shade300);
+                    },
+                  ),
         ),
-        child: StreamBuilder<PlayerState>(
-          stream: _audioPlayers[element.id]?.playerStateStream,
-          builder: (context, snapshot) {
-            final playing = snapshot.data?.playing ?? false;
-            return Icon(
-              playing ? Icons.pause : Icons.play_arrow,
-              color: Colors.white,
-              size: 20,
-            );
-          },
-        ),
-      ),
+        ...visibleElements.map((element) {
+          return Positioned(
+            left: element.position.x * scale,
+            top: element.position.y * scale,
+            width: element.size.width * scale,
+            height: element.size.height * scale,
+            child: _buildElement(element),
+          );
+        }),
+      ],
     );
   }
 
@@ -488,11 +496,11 @@ class _ReaderPageState extends State<ReaderPage> {
 
       if (isLastPage && isLastStep && _authController.isAuthenticated) {
         _hasShownCompletionMessage = true;
-        final userId = _authController.currentUser!.id;
+        final userId = _authController.currentUser!['id'].toString();
 
         // Remover livro em progresso e incrementar livros lidos
-        await _supabaseService.removeBookFromProgress(userId, widget.bookId);
-        await _supabaseService.incrementBooksRead(
+        await _apiService.removeBookFromProgress(userId, widget.bookId);
+        await _apiService.incrementBooksRead(
           userId,
           bookId: int.parse(widget.bookId),
         );
@@ -521,7 +529,7 @@ class _ReaderPageState extends State<ReaderPage> {
     ]);
 
     if (_authController.isAuthenticated) {
-      final userId = _authController.currentUser!.id;
+      final userId = _authController.currentUser!['id'].toString();
       final currentPageIndex = widget.controller.currentPageIndex;
       final currentStep = widget.controller.currentStep;
       final totalPages = widget.controller.pages.length;
@@ -538,7 +546,7 @@ class _ReaderPageState extends State<ReaderPage> {
           // Remover apenas a atualização de progresso, pois já foi tratado no método _checkAndShowCompletionMessage
           // Não mostrar mensagem ou aguardar delay aqui
         } else {
-          await _supabaseService.updateReadingProgress(
+          await _apiService.updateReadingProgress(
             userId,
             widget.bookId,
             currentPageIndex,
@@ -559,10 +567,10 @@ class _ReaderPageState extends State<ReaderPage> {
 
   Future<void> _addBookToProgressIfNeeded() async {
     if (_authController.isAuthenticated) {
-      final userId = _authController.currentUser!.id;
+      final userId = _authController.currentUser!['id'].toString();
       final currentPageIndex = widget.controller.currentPageIndex;
       final currentStep = widget.controller.currentStep;
-      await _supabaseService.updateReadingProgress(
+      await _apiService.updateReadingProgress(
         userId,
         widget.bookId,
         currentPageIndex,
@@ -622,35 +630,43 @@ class _ReaderPageState extends State<ReaderPage> {
           offsetX = (screenSize.width - contentWidth) / 2;
           offsetY = (screenSize.height - contentHeight) / 2;
 
+          final currentPage = widget.controller.currentPage!;
+          final pageIndex = widget.controller.currentPageIndex;
+          final pt = currentPage.pageTransition;
+          final switchMs =
+              pt.type.toLowerCase() == 'none'
+                  ? 1
+                  : pt.durationMs.clamp(200, 4000);
+
           return Container(
             color: Colors.black, // Back bars pretas
             child: Stack(
               children: [
-                // Fundo
                 Positioned(
                   left: offsetX,
                   top: offsetY,
                   width: contentWidth,
                   height: contentHeight,
-                  child: Image.network(
-                    widget.controller.currentPage!.background,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Container(color: Colors.grey[300]);
+                  child: AnimatedSwitcher(
+                    duration: Duration(milliseconds: switchMs),
+                    switchInCurve: Curves.easeInOutCubic,
+                    switchOutCurve: Curves.easeInOutCubic,
+                    transitionBuilder: (child, animation) {
+                      return buildReaderPageTransition(
+                        transition: pt,
+                        animation: animation,
+                        child: child,
+                      );
                     },
+                    child: KeyedSubtree(
+                      key: ValueKey<int>(pageIndex),
+                      child: _buildPageCanvasStack(
+                        currentPage,
+                        widget.controller.getVisibleElements(),
+                      ),
+                    ),
                   ),
                 ),
-
-                // Elementos
-                ...widget.controller.getVisibleElements().map((element) {
-                  return Positioned(
-                    left: element.position.x * scale + offsetX,
-                    top: element.position.y * scale + offsetY,
-                    width: element.size.width * scale,
-                    height: element.size.height * scale,
-                    child: _buildElement(element),
-                  );
-                }),
 
                 // Controles de navegação
                 Positioned(

@@ -1,20 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
+
 import '../models/book_element.dart';
+import 'audio_badge_layout.dart';
+import 'audio_button_widget.dart';
 
 class ImageElementWidget extends StatelessWidget {
   final BookElement element;
-  final Map<String, AudioPlayer> audioPlayers;
+  final Map<String, AudioPlayer>? audioPlayers;
 
   const ImageElementWidget({
     super.key,
     required this.element,
-    required this.audioPlayers,
+    this.audioPlayers,
   });
 
   @override
   Widget build(BuildContext context) {
-    Widget imageWidget = Container(
+    final imageChild = Container(
       width: double.infinity,
       height: double.infinity,
       decoration: BoxDecoration(borderRadius: BorderRadius.circular(8)),
@@ -36,60 +39,38 @@ class ImageElementWidget extends StatelessWidget {
         ),
       ),
     );
-    if (element.audio != null && element.audio!.isNotEmpty) {
-      imageWidget = Stack(
-        children: [
-          imageWidget,
-          Positioned(top: 4, right: 4, child: _buildAudioButton(context)),
-        ],
-      );
-    }
-    return imageWidget;
-  }
 
-  Widget _buildAudioButton(BuildContext context) {
-    return GestureDetector(
-      onTap: () async {
-        try {
-          if (!audioPlayers.containsKey(element.id)) {
-            final player = AudioPlayer();
-            audioPlayers[element.id] = player;
-            await player.setUrl(element.audio!);
-          }
-          final player = audioPlayers[element.id]!;
-          for (var otherPlayer in audioPlayers.values) {
-            if (otherPlayer != player) {
-              await otherPlayer.pause();
-            }
-          }
-          if (player.playing) {
-            await player.pause();
-          } else {
-            await player.play();
-          }
-        } catch (e) {
-          debugPrint('Erro ao manipular áudio: $e');
-        }
+    final audio = element.audio?.trim();
+    if (audio == null || audio.isEmpty || audioPlayers == null) {
+      return imageChild;
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final off = AudioBadgeLayout.outsideTopLeftFromElement(
+          element,
+          constraints.maxWidth,
+          constraints.maxHeight,
+        );
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned.fill(child: imageChild),
+            Positioned(
+              left: off.dx,
+              top: off.dy,
+              child: Opacity(
+                opacity: (element.opacity ?? 1).clamp(0.0, 1.0),
+                child: AudioButtonWidget(
+                  audioUrl: audio,
+                  audioPlayers: audioPlayers!,
+                  elementId: element.id,
+                ),
+              ),
+            ),
+          ],
+        );
       },
-      child: Container(
-        width: 36,
-        height: 36,
-        decoration: BoxDecoration(
-          color: Colors.black.withAlpha(128),
-          borderRadius: BorderRadius.circular(18),
-        ),
-        child: StreamBuilder<PlayerState>(
-          stream: audioPlayers[element.id]?.playerStateStream,
-          builder: (context, snapshot) {
-            final playing = snapshot.data?.playing ?? false;
-            return Icon(
-              playing ? Icons.pause : Icons.play_arrow,
-              color: Colors.white,
-              size: 20,
-            );
-          },
-        ),
-      ),
     );
   }
 }

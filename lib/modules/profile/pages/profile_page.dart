@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../controllers/profile_controller.dart';
-import '../../../widgets/responsive_navigation.dart';
+import '../../../core/layout/app_layout_tokens.dart';
+import '../../../widgets/app_shell_layout.dart';
 
 class ProfilePage extends StatelessWidget {
   const ProfilePage({super.key});
@@ -44,15 +45,28 @@ class ProfilePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = Get.put(ProfileController());
-    final orientation = MediaQuery.of(context).orientation;
-    final isLandscape = orientation == Orientation.landscape;
-
-    return Scaffold(
-      body: Row(
-        children: [
-          if (isLandscape) const ResponsiveNavigation(),
-          Expanded(
-            child: Obx(() {
+    return AppShellLayout(
+      appBar: AppBar(
+        backgroundColor: AppLayoutTokens.scaffoldBackground,
+        foregroundColor: AppLayoutTokens.textPrimary,
+        elevation: 0,
+        leading:
+            Navigator.canPop(context)
+                ? IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  onPressed: () => Get.back(),
+                )
+                : null,
+        title: const Text('Meu perfil'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: controller.signOut,
+            tooltip: 'Sair',
+          ),
+        ],
+      ),
+      body: Obx(() {
               if (controller.isLoading.value) {
                 return const Center(child: CircularProgressIndicator());
               }
@@ -71,17 +85,7 @@ class ProfilePage extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.logout),
-                          onPressed: controller.signOut,
-                          tooltip: 'Sair',
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 8),
                     // Avatar com botão de edição
                     Stack(
                       children: [
@@ -195,10 +199,6 @@ class ProfilePage extends StatelessWidget {
                 ),
               );
             }),
-          ),
-        ],
-      ),
-      bottomNavigationBar: !isLandscape ? const ResponsiveNavigation() : null,
     );
   }
 

@@ -1,21 +1,59 @@
 import 'package:flutter/material.dart';
-import '../models/book_element.dart';
-import 'package:just_audio/just_audio.dart';
 import 'package:auto_size_text/auto_size_text.dart';
+import 'package:just_audio/just_audio.dart';
+
+import '../models/book_element.dart';
+import 'audio_badge_layout.dart';
+import 'audio_button_widget.dart';
 
 class ShapeElementWidget extends StatelessWidget {
   final BookElement element;
-  final Map<String, AudioPlayer> audioPlayers;
+  final Map<String, AudioPlayer>? audioPlayers;
 
   const ShapeElementWidget({
     super.key,
     required this.element,
-    required this.audioPlayers,
+    this.audioPlayers,
   });
 
   @override
   Widget build(BuildContext context) {
-    return _renderShape(context);
+    return _maybeWithAudioBadge(_renderShape(context));
+  }
+
+  /// Botão de áudio junto à borda da caixa da forma (como no editor).
+  Widget _maybeWithAudioBadge(Widget shapeChild) {
+    final audio = element.audio?.trim();
+    if (audio == null || audio.isEmpty || audioPlayers == null) {
+      return shapeChild;
+    }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final off = AudioBadgeLayout.outsideTopLeftFromElement(
+          element,
+          constraints.maxWidth,
+          constraints.maxHeight,
+        );
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned.fill(child: shapeChild),
+            Positioned(
+              left: off.dx,
+              top: off.dy,
+              child: Opacity(
+                opacity: (element.opacity ?? 1).clamp(0.0, 1.0),
+                child: AudioButtonWidget(
+                  audioUrl: audio,
+                  audioPlayers: audioPlayers!,
+                  elementId: element.id,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   Widget _renderShape(BuildContext context) {
@@ -264,62 +302,7 @@ class ShapeElementWidget extends StatelessWidget {
         );
     }
 
-    if (element.audio != null && element.audio!.isNotEmpty) {
-      shapeWidget = Stack(
-        children: [
-          shapeWidget,
-          Positioned(top: 4, right: 4, child: _buildAudioButton(context)),
-        ],
-      );
-    }
-
     return shapeWidget;
-  }
-
-  Widget _buildAudioButton(BuildContext context) {
-    return GestureDetector(
-      onTap: () async {
-        try {
-          if (!audioPlayers.containsKey(element.id)) {
-            final player = AudioPlayer();
-            audioPlayers[element.id] = player;
-            await player.setUrl(element.audio!);
-          }
-          final player = audioPlayers[element.id]!;
-          for (var otherPlayer in audioPlayers.values) {
-            if (otherPlayer != player) {
-              await otherPlayer.pause();
-            }
-          }
-          if (player.playing) {
-            await player.pause();
-          } else {
-            await player.play();
-          }
-        } catch (e) {
-          debugPrint('Erro ao manipular áudio: $e');
-        }
-      },
-      child: Container(
-        width: 36,
-        height: 36,
-        decoration: BoxDecoration(
-          color: Colors.black.withAlpha(128),
-          borderRadius: BorderRadius.circular(18),
-        ),
-        child: StreamBuilder<PlayerState>(
-          stream: audioPlayers[element.id]?.playerStateStream,
-          builder: (context, snapshot) {
-            final playing = snapshot.data?.playing ?? false;
-            return Icon(
-              playing ? Icons.pause : Icons.play_arrow,
-              color: Colors.white,
-              size: 20,
-            );
-          },
-        ),
-      ),
-    );
   }
 
   String? _getFontFamily() {

@@ -1,10 +1,10 @@
 import 'package:get/get.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/models/book_model.dart';
 import 'package:flutter/foundation.dart';
+import '../../../core/services/luditeca_api_service.dart';
 
 class FavoritesController extends GetxController {
-  final supabase = Supabase.instance.client;
+  final LuditecaApiService _service = LuditecaApiService();
   final RxList<BookModel> favoriteBooks = <BookModel>[].obs;
   final RxBool isLoading = false.obs;
   final RxString error = ''.obs;
@@ -20,34 +20,17 @@ class FavoritesController extends GetxController {
       isLoading.value = true;
       error.value = '';
 
-      final userId = supabase.auth.currentUser?.id;
+      final userId = _service.currentUser?['id']?.toString();
       if (userId == null) {
         error.value = 'Usuário não autenticado';
         return;
       }
 
-      // Busca os favoritos do usuário
-      final userResponse =
-          await supabase
-              .from('profiles')
-              .select('favorites')
-              .eq('id', userId)
-              .single();
-
-      final List<int> favoriteIds = List<int>.from(
-        userResponse['favorites'] ?? [],
-      );
-
-      if (favoriteIds.isEmpty) {
+      final booksResponse = await _service.getFavoriteBooks();
+      if (booksResponse.isEmpty) {
         favoriteBooks.clear();
         return;
       }
-
-      // Busca os livros favoritos
-      final booksResponse = await supabase
-          .from('books')
-          .select('*')
-          .inFilter('id', favoriteIds);
 
       final List<BookModel> loadedBooks = [];
       for (final bookData in booksResponse) {
@@ -70,22 +53,18 @@ class FavoritesController extends GetxController {
 
   Future<void> toggleFavorite(BookModel book) async {
     try {
-      final userId = supabase.auth.currentUser?.id;
+      final userId = _service.currentUser?['id']?.toString();
       if (userId == null) {
         error.value = 'Usuário não autenticado';
         return;
       }
       final isCurrentlyFavorite = isFavorite(book);
-
-      // Busca os favoritos atuais do usuário
-      final userResponse =
-          await supabase
-              .from('profiles')
-              .select('favorites')
-              .eq('id', userId)
-              .single();
-
-      List<int> favoriteIds = List<int>.from(userResponse['favorites'] ?? []);
+      final profile = await _service.getUserProfile(userId);
+      List<int> favoriteIds =
+          (profile?['favorites'] as List<dynamic>? ?? [])
+              .map((e) => int.tryParse(e.toString()) ?? 0)
+              .where((e) => e > 0)
+              .toList();
 
       if (isCurrentlyFavorite) {
         // Remove o ID do livro da lista de favoritos
@@ -99,11 +78,7 @@ class FavoritesController extends GetxController {
         favoriteBooks.add(book);
       }
 
-      // Atualiza os favoritos no perfil do usuário
-      await supabase
-          .from('profiles')
-          .update({'favorites': favoriteIds})
-          .eq('id', userId);
+      await _service.setFavorites(favoriteIds);
 
       debugPrint(
         'FavoritesController: Total de favoritos após operação: ${favoriteBooks.length}',

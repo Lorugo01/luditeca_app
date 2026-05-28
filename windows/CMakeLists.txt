@@ -1,10 +1,18 @@
-# Project-level configuration.
+﻿# Project-level configuration.
 cmake_minimum_required(VERSION 3.14)
-project(universeteca LANGUAGES CXX)
+
+# flutter_tts no Windows precisa do nuget.exe (Microsoft.Windows.CppWinRT).
+# Coloque em tools/nuget.exe via scripts/setup-windows-build.ps1
+set(_LUDITECA_NUGET_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../tools")
+if(EXISTS "${_LUDITECA_NUGET_DIR}/nuget.exe")
+  list(PREPEND CMAKE_PROGRAM_PATH "${_LUDITECA_NUGET_DIR}")
+endif()
+
+project(Luditeca LANGUAGES CXX)
 
 # The name of the executable created for the application. Change this to change
 # the on-disk name of your application.
-set(BINARY_NAME "universeteca")
+set(BINARY_NAME "Luditeca")
 
 # Explicitly opt in to modern CMake behaviors to avoid warnings with recent
 # versions of CMake.
@@ -106,3 +114,4 @@ install(DIRECTORY "${PROJECT_BUILD_DIR}/${FLUTTER_ASSET_DIR_NAME}"
 install(FILES "${AOT_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
   CONFIGURATIONS Profile;Release
   COMPONENT Runtime)
+
