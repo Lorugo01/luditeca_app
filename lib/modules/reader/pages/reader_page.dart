@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
@@ -12,7 +14,9 @@ import '../widgets/reader_page_transition.dart';
 import '../widgets/audio_button_widget.dart';
 import '../widgets/audio_badge_layout.dart';
 import '../../../core/controllers/auth_controller.dart';
+import '../../profile/controllers/profile_controller.dart';
 import '../../../core/services/luditeca_api_service.dart';
+import '../services/reading_xp_service.dart';
 
 // Dimensões do canvas (ex: 1280x720 para 16:9)
 const double canvasWidth = 1280;
@@ -87,6 +91,7 @@ class _ReaderPageState extends State<ReaderPage> {
 
   @override
   void dispose() {
+    unawaited(ReadingXpService.instance.endSession());
     // Limpar players de áudio
     _cleanupAudioPlayers();
 
@@ -500,10 +505,13 @@ class _ReaderPageState extends State<ReaderPage> {
 
         // Remover livro em progresso e incrementar livros lidos
         await _apiService.removeBookFromProgress(userId, widget.bookId);
-        await _apiService.incrementBooksRead(
+        final gamification = await _apiService.incrementBooksRead(
           userId,
           bookId: int.parse(widget.bookId),
         );
+        if (Get.isRegistered<ProfileController>()) {
+          Get.find<ProfileController>().applyGamificationResult(gamification);
+        }
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(

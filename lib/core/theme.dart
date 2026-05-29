@@ -1,27 +1,26 @@
 import 'package:flutter/material.dart';
-import 'layout/app_layout_tokens.dart';
+
+import 'theme/app_theme_palette.dart';
 
 class AppTheme {
-  static ThemeData get lightTheme => forId('ocean');
+  static ThemeData get lightTheme => forId(AppThemeRegistry.defaultId);
 
+  /// Constrói o `ThemeData` a partir do id de uma paleta.
   static ThemeData forId(String id) {
-    final colors = _paletteFor(id);
+    final palette = AppThemeRegistry.palette(id);
+    final brightness = palette.isDark ? Brightness.dark : Brightness.light;
+    final onPalette = palette.isDark ? Colors.white : palette.text;
+
     return ThemeData(
       fontFamily: 'Poppins',
-      primarySwatch: Colors.blue,
-      primaryColor: colors.primary,
-      scaffoldBackgroundColor: colors.scaffold,
+      brightness: brightness,
+      primaryColor: palette.primary,
+      scaffoldBackgroundColor: palette.background,
       textTheme: TextTheme(
-        displayLarge: const TextStyle(
-          fontWeight: FontWeight.bold,
-          color: Colors.black,
-        ),
-        displayMedium: const TextStyle(
-          fontWeight: FontWeight.bold,
-          color: Colors.black,
-        ),
-        bodyLarge: TextStyle(fontSize: 16, color: Colors.grey[800]),
-        bodyMedium: TextStyle(fontSize: 14, color: Colors.grey[700]),
+        displayLarge: TextStyle(fontWeight: FontWeight.bold, color: palette.text),
+        displayMedium: TextStyle(fontWeight: FontWeight.bold, color: palette.text),
+        bodyLarge: TextStyle(fontSize: 16, color: palette.text),
+        bodyMedium: TextStyle(fontSize: 14, color: palette.text.withAlpha(220)),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
@@ -31,41 +30,20 @@ class AppTheme {
       ),
       inputDecorationTheme: InputDecorationTheme(
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 12,
-        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       ),
-      colorScheme: ColorScheme.light(
-        primary: colors.primary,
-        secondary: colors.accent,
-        surface: colors.scaffold,
+      colorScheme: ColorScheme(
+        brightness: brightness,
+        primary: palette.primary,
+        onPrimary: palette.isDark ? Colors.black : Colors.white,
+        secondary: palette.accent,
+        onSecondary: palette.isDark ? Colors.black : Colors.white,
+        surface: palette.background,
+        onSurface: onPalette,
+        error: const Color(0xFFC53030),
+        onError: Colors.white,
       ),
     );
-  }
-
-  static _ThemePalette _paletteFor(String id) {
-    switch (id) {
-      case 'rose':
-        return const _ThemePalette(
-          primary: Color(0xFFFF6B8A),
-          accent: Color(0xFFFF4499),
-          scaffold: Color(0xFFFFF1F5),
-        );
-      case 'forest':
-        return const _ThemePalette(
-          primary: Color(0xFF22C55E),
-          accent: Color(0xFF14B8A6),
-          scaffold: Color(0xFFF0FDF4),
-        );
-      case 'ocean':
-      default:
-        return const _ThemePalette(
-          primary: AppLayoutTokens.primary,
-          accent: AppLayoutTokens.accent,
-          scaffold: AppLayoutTokens.scaffoldBackground,
-        );
-    }
   }
 
   static double getResponsiveSize(BuildContext context, double baseSize) {
@@ -87,16 +65,4 @@ class AppTheme {
     }
     return const EdgeInsets.all(24.0);
   }
-}
-
-class _ThemePalette {
-  const _ThemePalette({
-    required this.primary,
-    required this.accent,
-    required this.scaffold,
-  });
-
-  final Color primary;
-  final Color accent;
-  final Color scaffold;
 }

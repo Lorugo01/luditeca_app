@@ -10,10 +10,12 @@ import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../../core/controllers/auth_controller.dart';
+import '../../profile/controllers/profile_controller.dart';
 import '../../../core/models/book_model.dart';
 import '../../../core/services/luditeca_api_service.dart';
 import '../utils/book_pages_loader.dart';
 import '../utils/reading_progress_helper.dart';
+import '../services/reading_xp_service.dart';
 
 enum _DigitalView { pdf, epub, empty, loading }
 
@@ -192,6 +194,9 @@ class _DigitalBookReaderPageState extends State<DigitalBookReaderPage> {
       }
 
       _book = loaded;
+      if (_authController.isAuthenticated) {
+        ReadingXpService.instance.beginSession(loaded.id);
+      }
       _pickInitialView(loaded);
     } catch (e) {
       if (!mounted) return;
@@ -259,6 +264,7 @@ class _DigitalBookReaderPageState extends State<DigitalBookReaderPage> {
     _pdfPageRestored = true;
     _pdfController.jumpToPage(target);
     _lastSavedPdfPage = target;
+    _onPdfPageChanged(target);
   }
 
   Future<void> _persistPdfProgress() async {
@@ -276,7 +282,11 @@ class _DigitalBookReaderPageState extends State<DigitalBookReaderPage> {
     try {
       final userId = _authController.currentUser!['id'].toString();
       await ReadingProgressHelper.clear(_activeBook.id);
-      await _apiService.incrementBooksRead(userId, bookId: _activeBook.id);
+      final gamification =
+          await _apiService.incrementBooksRead(userId, bookId: _activeBook.id);
+      if (Get.isRegistered<ProfileController>()) {
+        Get.find<ProfileController>().applyGamificationResult(gamification);
+      }
     } catch (e) {
       debugPrint('Erro ao registar conclusão (digital): $e');
     }
@@ -373,6 +383,7 @@ class _DigitalBookReaderPageState extends State<DigitalBookReaderPage> {
 
   @override
   void dispose() {
+    unawaited(ReadingXpService.instance.endSession());
     if (_view == _DigitalView.pdf) {
       _persistPdfProgress();
     }
@@ -471,7 +482,7 @@ class _DigitalBookReaderPageState extends State<DigitalBookReaderPage> {
             _restorePdfPageIfNeeded();
           },
           onPageChanged: (details) {
-            _persistPdfProgress();
+            _onPdfPageChanged(details.newPageNumber);
           },
           onZoomLevelChanged: (details) {
             if (!mounted) return;
@@ -508,7 +519,7 @@ class _DigitalBookReaderPageState extends State<DigitalBookReaderPage> {
           _restorePdfPageIfNeeded();
         },
         onPageChanged: (details) {
-          _persistPdfProgress();
+          _onPdfPageChanged(details.newPageNumber);
         },
         onZoomLevelChanged: (details) {
           if (!mounted) return;
@@ -518,6 +529,14 @@ class _DigitalBookReaderPageState extends State<DigitalBookReaderPage> {
           _onPdfLoadFailed(details.description);
         },
       ),
+    );
+  }
+
+  void _onPdfPageChanged(int pageNumber) {
+    unawaited(_persistPdfProgress());
+    if (!_authController.isAuthenticated || pageNumber < 1) return;
+    unawaited(
+      ReadingXpService.instance.onPageRead(_activeBook.id, pageNumber - 1),
     );
   }
 

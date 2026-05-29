@@ -60,7 +60,7 @@ class _SettingsLayoutPickerSheet extends StatelessWidget {
         children: [
           Text(
             title,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w800,
               color: AppLayoutTokens.textPrimary,
@@ -114,7 +114,7 @@ class _SettingsLayoutPickerSheet extends StatelessWidget {
                               children: [
                                 Text(
                                   option.title,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontWeight: FontWeight.w800,
                                     fontSize: 14,
                                     color: AppLayoutTokens.textPrimary,
@@ -134,7 +134,7 @@ class _SettingsLayoutPickerSheet extends StatelessWidget {
                             Container(
                               width: 10,
                               height: 10,
-                              decoration: const BoxDecoration(
+                              decoration: BoxDecoration(
                                 color: AppLayoutTokens.primary,
                                 shape: BoxShape.circle,
                               ),

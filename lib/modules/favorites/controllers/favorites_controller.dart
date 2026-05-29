@@ -2,6 +2,7 @@ import 'package:get/get.dart';
 import '../../../core/models/book_model.dart';
 import 'package:flutter/foundation.dart';
 import '../../../core/services/luditeca_api_service.dart';
+import '../../profile/controllers/profile_controller.dart';
 
 class FavoritesController extends GetxController {
   final LuditecaApiService _service = LuditecaApiService();
@@ -78,7 +79,11 @@ class FavoritesController extends GetxController {
         favoriteBooks.add(book);
       }
 
-      await _service.setFavorites(favoriteIds);
+      final result = await _service.setFavorites(favoriteIds);
+      if (Get.isRegistered<ProfileController>()) {
+        Get.find<ProfileController>().applyGamificationResult(result);
+        Get.find<ProfileController>().favorites.value = favoriteIds.length;
+      }
 
       debugPrint(
         'FavoritesController: Total de favoritos após operação: ${favoriteBooks.length}',

@@ -6,11 +6,10 @@ import '../../../core/layout/app_layout_tokens.dart';
 import '../../../core/navigation/app_shell_navigator.dart';
 import '../../../core/preferences/app_preferences_controller.dart';
 import '../../../core/preferences/layout_option.dart';
-import '../../../core/theme.dart';
 import '../../../widgets/app_shell_layout.dart';
-import '../../profile/pages/profile_page.dart';
 import '../widgets/settings_layout_picker_sheet.dart';
 import 'settings_offline_page.dart';
+import 'theme_picker_page.dart';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
@@ -32,21 +31,21 @@ class SettingsPage extends StatelessWidget {
                 items: [
                   _SettingsLinkItem(
                     emoji: '👤',
-                    title: 'Editar Perfil',
-                    subtitle: 'Nome, idade e personagem',
-                    onTap: () => Get.to(() => const ProfilePage()),
+                    title: 'Meu Perfil',
+                    subtitle: 'Estatísticas, nome e nível',
+                    onTap: () => Get.toNamed('/profile'),
                   ),
                   _SettingsLinkItem(
                     emoji: '🎨',
                     title: 'Temas',
                     subtitle: 'Cores e visual do app',
-                    onTap: () => _showThemePicker(context, prefs),
+                    onTap: () => Get.to(() => const ThemePickerPage()),
                   ),
                   _SettingsLinkItem(
                     emoji: '🏆',
                     title: 'Conquistas',
                     subtitle: 'Medalhas e badges',
-                    onTap: () => Get.to(() => const ProfilePage()),
+                    onTap: () => Get.toNamed('/achievements'),
                   ),
                   _SettingsLinkItem(
                     emoji: '📦',
@@ -70,141 +69,115 @@ class SettingsPage extends StatelessWidget {
     );
   }
 
-  void _showThemePicker(BuildContext context, AppPreferencesController prefs) {
-  const themes = [
-    ('ocean', '🌊 Oceano', 'Azul claro — padrão'),
-    ('rose', '🌸 Rosa', 'Rosa e coral'),
-    ('forest', '🌿 Floresta', 'Verde e menta'),
-  ];
-
-    Get.bottomSheet<void>(
-      Container(
-        margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: AppLayoutTokens.scaffoldBackground,
-          borderRadius: BorderRadius.circular(28),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text(
-              'Temas',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-                color: AppLayoutTokens.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Obx(() {
-              return Column(
-                children: themes.map((t) {
-                  final selected = prefs.appThemeId.value == t.$1;
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: ListTile(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        side: BorderSide(
-                          color: selected ? AppLayoutTokens.primary : Colors.transparent,
-                          width: 2,
-                        ),
-                      ),
-                      tileColor: selected
-                          ? AppLayoutTokens.primary.withAlpha(36)
-                          : AppLayoutTokens.cardBackground,
-                      title: Text(t.$2, style: const TextStyle(fontWeight: FontWeight.w800)),
-                      subtitle: Text(t.$3),
-                      trailing: selected
-                          ? const Icon(Icons.check_circle, color: AppLayoutTokens.primary)
-                          : null,
-                      onTap: () async {
-                        await prefs.setAppTheme(t.$1);
-                        Get.changeTheme(AppTheme.forId(t.$1));
-                        Get.back();
-                        Get.snackbar(
-                          'Tema aplicado',
-                          t.$2,
-                          snackPosition: SnackPosition.BOTTOM,
-                          duration: const Duration(seconds: 2),
-                        );
-                      },
-                    ),
-                  );
-                }).toList(),
-              );
-            }),
-          ],
-        ),
-      ),
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-    );
-  }
-
   Future<void> _showDeleteAccountFlow(BuildContext context) async {
-    var step = 0;
-    final inputController = TextEditingController();
+    final passwordController = TextEditingController();
+    final auth = Get.find<AuthController>();
+    final email = auth.currentUser?['email']?.toString() ?? '';
+
+    var obscure = true;
+    var loading = false;
+    String? errorText;
 
     await Get.dialog<void>(
       StatefulBuilder(
         builder: (context, setState) {
+          Future<void> confirm() async {
+            final pwd = passwordController.text;
+            if (pwd.isEmpty) {
+              setState(() => errorText = 'Informe a senha.');
+              return;
+            }
+            if (email.isEmpty) {
+              setState(() => errorText = 'Não foi possível identificar a conta.');
+              return;
+            }
+            setState(() {
+              loading = true;
+              errorText = null;
+            });
+
+            final ok = await auth.signIn(email, pwd);
+            if (!ok) {
+              setState(() {
+                loading = false;
+                errorText = 'Senha incorreta.';
+              });
+              return;
+            }
+
+            Get.back();
+            final prefs = Get.find<AppPreferencesController>();
+            await prefs.clearLocalAppData();
+            await auth.signOut();
+            Get.offAllNamed('/login');
+            Get.snackbar(
+              'Conta',
+              'Sessão encerrada e dados locais apagados.',
+              snackPosition: SnackPosition.BOTTOM,
+            );
+          }
+
           return AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            title: Text(step == 0 ? 'Excluir conta' : 'Confirmar exclusão'),
-            content: step == 0
-                ? const Text(
-                    'Esta ação apaga os dados locais e encerra a sessão. '
-                    'Para remover a conta no servidor, contacte o administrador.',
-                  )
-                : TextField(
-                    controller: inputController,
-                    textCapitalization: TextCapitalization.characters,
-                    decoration: const InputDecoration(
-                      labelText: 'Digite EXCLUIR',
-                      border: OutlineInputBorder(),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            title: const Text('Excluir conta'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Confirme a sua senha para apagar os dados locais e '
+                  'encerrar a sessão.',
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: passwordController,
+                  obscureText: obscure,
+                  autofocus: true,
+                  decoration: InputDecoration(
+                    labelText: 'Senha',
+                    border: const OutlineInputBorder(),
+                    errorText: errorText,
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        obscure ? Icons.visibility : Icons.visibility_off,
+                      ),
+                      onPressed: () => setState(() => obscure = !obscure),
                     ),
-                    onChanged: (_) => setState(() {}),
                   ),
+                  onSubmitted: (_) => confirm(),
+                ),
+              ],
+            ),
             actions: [
               TextButton(
-                onPressed: () => Get.back(),
+                onPressed: loading ? null : () => Get.back(),
                 child: const Text('Cancelar'),
               ),
-              if (step == 0)
-                FilledButton(
-                  onPressed: () => setState(() => step = 1),
-                  style: FilledButton.styleFrom(backgroundColor: const Color(0xFFC53030)),
-                  child: const Text('Entendi'),
-                )
-              else
-                FilledButton(
-                  onPressed: inputController.text.trim().toUpperCase() == 'EXCLUIR'
-                      ? () async {
-                          Get.back();
-                          final prefs = Get.find<AppPreferencesController>();
-                          await prefs.clearLocalAppData();
-                          await Get.find<AuthController>().signOut();
-                          Get.offAllNamed('/login');
-                          Get.snackbar(
-                            'Conta',
-                            'Sessão encerrada e dados locais apagados.',
-                            snackPosition: SnackPosition.BOTTOM,
-                          );
-                        }
-                      : null,
-                  style: FilledButton.styleFrom(backgroundColor: const Color(0xFFC53030)),
-                  child: const Text('Excluir'),
+              FilledButton(
+                onPressed: loading ? null : confirm,
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFFC53030),
                 ),
+                child: loading
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Text('Excluir'),
+              ),
             ],
           );
         },
       ),
     );
 
-    inputController.dispose();
+    passwordController.dispose();
   }
 }
 
@@ -305,7 +278,7 @@ class _SettingsHeader extends StatelessWidget {
           child: InkWell(
             customBorder: const CircleBorder(),
             onTap: onBack,
-            child: const SizedBox(
+            child: SizedBox(
               width: 44,
               height: 44,
               child: Icon(Icons.arrow_back, color: AppLayoutTokens.textPrimary),
@@ -313,7 +286,7 @@ class _SettingsHeader extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 12),
-        const Text(
+        Text(
           '⚙️ Configurações',
           style: TextStyle(
             fontSize: 24,
@@ -415,7 +388,7 @@ class _SettingsLinkTile extends StatelessWidget {
                       children: [
                         Text(
                           item.title,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontWeight: FontWeight.w800,
                             fontSize: 15,
                             color: AppLayoutTokens.textPrimary,
@@ -504,7 +477,7 @@ class _LayoutShortcutCard extends StatelessWidget {
                   children: [
                     Text(
                       title,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontWeight: FontWeight.w800,
                         fontSize: 13,
                         color: AppLayoutTokens.textPrimary,

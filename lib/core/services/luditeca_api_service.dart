@@ -502,6 +502,7 @@ class LuditecaApiService {
       final staleBookIds = <String>[];
 
       for (final entry in progress.entries) {
+        if (_isXpMetaProgressKey(entry.key.toString())) continue;
         final raw = entry.value;
         if (raw is! Map) continue;
 
@@ -537,10 +538,13 @@ class LuditecaApiService {
     }
   }
 
-  Future<bool> incrementBooksRead(String userId, {required int bookId}) async {
+  Future<Map<String, dynamic>?> incrementBooksRead(
+    String userId, {
+    required int bookId,
+  }) async {
     try {
       final profile = await getUserProfile(userId);
-      if (profile == null) return false;
+      if (profile == null) return null;
 
       int currentBooksRead = int.tryParse('${profile['books_read'] ?? 0}') ?? 0;
       final List<dynamic> history = profile['books_read_history'] is List
@@ -550,7 +554,7 @@ class LuditecaApiService {
         history.add(bookId);
       }
 
-      await _requestJson(
+      return await _requestJson(
         'PATCH',
         '/me/profile',
         body: {
@@ -558,22 +562,69 @@ class LuditecaApiService {
           'books_read_history': history,
         },
       );
-      return true;
     } catch (e) {
       debugPrint('Erro ao incrementar books_read: $e');
-      return false;
+      return null;
+    }
+  }
+
+  static const String _xpMetaProgressKey = '__xp_meta';
+
+  bool _isXpMetaProgressKey(String bookId) =>
+      bookId == _xpMetaProgressKey || bookId.startsWith('__');
+
+  /// Lista conquistas com progresso e sincroniza desbloqueios no servidor.
+  Future<Map<String, dynamic>?> getAchievements() async {
+    if (!isAuthenticated) return null;
+    try {
+      return await _requestJson('GET', '/me/profile/achievements');
+    } catch (e) {
+      debugPrint('Erro ao carregar conquistas: $e');
+      return null;
+    }
+  }
+
+  /// Atribui XP por páginas lidas (30 cada) e/ou tempo de leitura (30 por hora).
+  Future<Map<String, dynamic>?> awardReadingXp({
+    List<Map<String, dynamic>>? pages,
+    int? readingSeconds,
+  }) async {
+    if (!isAuthenticated) return null;
+    final body = <String, dynamic>{};
+    if (pages != null && pages.isNotEmpty) {
+      body['pages'] = pages;
+    }
+    if (readingSeconds != null && readingSeconds > 0) {
+      body['reading_seconds'] = readingSeconds;
+    }
+    if (body.isEmpty) return null;
+
+    try {
+      final response = await _requestJson('POST', '/me/profile/award-xp', body: body);
+      return response;
+    } catch (e) {
+      debugPrint('Erro ao atribuir XP de leitura: $e');
+      return null;
     }
   }
 
   Future<Map<String, dynamic>> updateMyProfile({
     required String name,
     String? iconeUrl,
+    int? age,
+    String? avatarId,
+    int? xpTotal,
+    int? xpBalance,
   }) async {
-    await _requestJson(
-      'PATCH',
-      '/me/profile',
-      body: {'name': name, if (iconeUrl != null) 'icone': iconeUrl},
-    );
+    final body = <String, dynamic>{
+      'name': name,
+      if (iconeUrl != null) 'icone': iconeUrl,
+      if (age != null) 'age': age,
+      if (avatarId != null) 'avatar_id': avatarId,
+      if (xpTotal != null) 'xp_total': xpTotal,
+      if (xpBalance != null) 'xp_balance': xpBalance,
+    };
+    await _requestJson('PATCH', '/me/profile', body: body);
     final response = await _requestJson('GET', '/me/profile');
     return Map<String, dynamic>.from(response['profile'] as Map<String, dynamic>);
   }
@@ -586,8 +637,12 @@ class LuditecaApiService {
         .toList();
   }
 
-  Future<void> setFavorites(List<int> favoriteIds) async {
-    await _requestJson('PATCH', '/me/profile', body: {'favorites': favoriteIds});
+  Future<Map<String, dynamic>> setFavorites(List<int> favoriteIds) async {
+    return await _requestJson(
+      'PATCH',
+      '/me/profile',
+      body: {'favorites': favoriteIds},
+    );
   }
 
   Future<String> uploadAvatar({

@@ -8,6 +8,7 @@ import 'package:get/get.dart';
 import 'package:just_audio/just_audio.dart';
 
 import '../../../core/controllers/auth_controller.dart';
+import '../../profile/controllers/profile_controller.dart';
 import '../../../core/layout/app_layout_tokens.dart';
 import '../../../core/models/book_model.dart';
 import '../../../core/services/luditeca_api_service.dart';
@@ -15,6 +16,7 @@ import '../models/animated_slot.dart';
 import '../models/book_quiz.dart';
 import '../utils/book_pages_loader.dart';
 import '../utils/reading_progress_helper.dart';
+import '../services/reading_xp_service.dart';
 import '../widgets/animated_reader_accessibility.dart';
 
 /// Leitor de livro animado (paridade com `InteractiveBookView.jsx` do Play).
@@ -142,6 +144,11 @@ class _AnimatedBookReaderPageState extends State<AnimatedBookReaderPage> {
       });
 
       await _initSoundtrack(loaded);
+
+      if (_authController.isAuthenticated) {
+        ReadingXpService.instance.beginSession(loaded.id);
+        await ReadingXpService.instance.onPageRead(loaded.id, startIndex);
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -193,10 +200,13 @@ class _AnimatedBookReaderPageState extends State<AnimatedBookReaderPage> {
     try {
       final userId = _authController.currentUser!['id'].toString();
       await ReadingProgressHelper.clear(_activeBook.id);
-      await _apiService.incrementBooksRead(
+      final gamification = await _apiService.incrementBooksRead(
         userId,
         bookId: _activeBook.id,
       );
+      if (Get.isRegistered<ProfileController>()) {
+        Get.find<ProfileController>().applyGamificationResult(gamification);
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -378,6 +388,9 @@ class _AnimatedBookReaderPageState extends State<AnimatedBookReaderPage> {
       _registerCompletionIfNeeded();
     }
     unawaited(_persistProgress());
+    if (_authController.isAuthenticated) {
+      unawaited(ReadingXpService.instance.onPageRead(_activeBook.id, index));
+    }
   }
 
   Future<void> _handleQuizAnswer(int option, BookQuizQuestion quiz) async {
@@ -398,6 +411,7 @@ class _AnimatedBookReaderPageState extends State<AnimatedBookReaderPage> {
 
   @override
   void dispose() {
+    unawaited(ReadingXpService.instance.endSession());
     _disposed = true;
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     if (_ttsReady) {

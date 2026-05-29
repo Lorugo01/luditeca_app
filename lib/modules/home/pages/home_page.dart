@@ -5,6 +5,7 @@ import '../../../core/controllers/auth_controller.dart';
 import '../../../core/layout/app_layout_tokens.dart';
 import '../../../widgets/app_shell_layout.dart';
 import '../../profile/controllers/profile_controller.dart';
+import '../../profile/data/profile_xp_level.dart';
 import '../controllers/home_controller.dart';
 import '../widgets/home_continue_section.dart';
 import '../widgets/home_menu_section.dart';
@@ -25,7 +26,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     Get.find<AuthController>();
     homeController = Get.put(HomeController());
     if (!Get.isRegistered<ProfileController>()) {
-      Get.lazyPut(() => ProfileController(), fenix: true);
+      Get.put(ProfileController(), permanent: true);
     }
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -98,14 +99,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       padding: EdgeInsets.fromLTRB(16, topPad + 8, 16, 8),
       child: Column(
         children: [
-          const Text(
+          Text(
             'Luditeca',
             style: TextStyle(
               fontSize: 34,
               fontWeight: FontWeight.w900,
               color: AppLayoutTokens.primary,
               letterSpacing: -0.5,
-              shadows: [
+              shadows: const [
                 Shadow(
                   color: Color(0x440EA5E9),
                   blurRadius: 8,
@@ -115,7 +116,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             ),
           ),
           const SizedBox(height: 4),
-          const Text(
+          Text(
             'Sua biblioteca interativa! ✨',
             style: TextStyle(
               fontSize: 14,
@@ -135,16 +136,16 @@ class _HomeBackground extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            Color(0x660EA5E9),
-            Color(0x3338BDF8),
+            const Color(0x660EA5E9),
+            const Color(0x3338BDF8),
             AppLayoutTokens.scaffoldBackground,
           ],
-          stops: [0.0, 0.35, 0.72],
+          stops: const [0.0, 0.35, 0.72],
         ),
       ),
       child: Stack(
@@ -200,10 +201,9 @@ class _HomeProfileBadge extends StatelessWidget {
               ? user!['name'].toString()
               : _nameFromEmail(user?['email']?.toString()));
 
-      final booksRead = profileCtrl?.booksRead.value ?? 0;
-      final xpTotal = booksRead * 100;
-      final level = _levelFromBooks(booksRead);
-      final progressPct = (booksRead % 5) / 5.0;
+      final xpTotal = profileCtrl?.xpTotal.value ?? 0;
+      final xpBalance = profileCtrl?.xpBalance.value ?? xpTotal;
+      final levelSnap = ProfileXpLevel.snapshot(xpTotal);
 
       final avatarUrl = profileCtrl?.icone.value ?? '';
 
@@ -213,7 +213,7 @@ class _HomeProfileBadge extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             displayName,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.w800,
               color: AppLayoutTokens.primary,
@@ -221,7 +221,7 @@ class _HomeProfileBadge extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            '${level.emoji} Nível ${level.level} — ${level.title}',
+            '${levelSnap.emoji} Nível ${levelSnap.level} — ${levelSnap.title}',
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w700,
@@ -234,7 +234,7 @@ class _HomeProfileBadge extends StatelessWidget {
             child: ClipRRect(
               borderRadius: BorderRadius.circular(99),
               child: LinearProgressIndicator(
-                value: progressPct.clamp(0.05, 1.0),
+                value: levelSnap.progress.clamp(0.05, 1.0),
                 minHeight: 8,
                 backgroundColor: AppLayoutTokens.primary.withAlpha(36),
                 color: AppLayoutTokens.primary,
@@ -243,7 +243,7 @@ class _HomeProfileBadge extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            '$xpTotal XP total · $xpTotal XP disponível',
+            '$xpTotal XP total · $xpBalance XP disponível',
             style: TextStyle(
               fontSize: 11,
               color: AppLayoutTokens.textPrimary.withAlpha(128),
@@ -260,29 +260,6 @@ class _HomeProfileBadge extends StatelessWidget {
     if (part.isEmpty) return 'Leitor';
     return part[0].toUpperCase() + part.substring(1);
   }
-
-  _LevelInfo _levelFromBooks(int booksRead) {
-    if (booksRead >= 20) {
-      return const _LevelInfo('🌟', 5, 'Super Leitor');
-    }
-    if (booksRead >= 10) {
-      return const _LevelInfo('📚', 4, 'Leitor Avançado');
-    }
-    if (booksRead >= 5) {
-      return const _LevelInfo('🚀', 3, 'Explorador');
-    }
-    if (booksRead >= 2) {
-      return const _LevelInfo('🌱', 2, 'Leitor Curioso');
-    }
-    return const _LevelInfo('🌱', 1, 'Leitor Iniciante');
-  }
-}
-
-class _LevelInfo {
-  const _LevelInfo(this.emoji, this.level, this.title);
-  final String emoji;
-  final int level;
-  final String title;
 }
 
 class _Avatar extends StatelessWidget {

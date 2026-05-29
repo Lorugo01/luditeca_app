@@ -1,11 +1,15 @@
 import 'package:get/get.dart';
 import '../models/book_element.dart';
 import '../../../core/services/luditeca_api_service.dart';
+import '../services/reading_xp_service.dart';
 import 'package:flutter/foundation.dart';
+import 'dart:async';
 import 'dart:convert';
 
 class ReaderController extends GetxController {
   final LuditecaApiService _apiService = LuditecaApiService();
+
+  String? _loadedBookId;
 
   final _isLoading = true.obs;
   final _error = Rx<String?>(null);
@@ -48,6 +52,13 @@ class ReaderController extends GetxController {
                 : 0;
 
         _currentStep.value = initialStep ?? 0;
+
+        _loadedBookId = bookId;
+        final id = int.tryParse(bookId);
+        if (id != null) {
+          ReadingXpService.instance.beginSession(id);
+          await ReadingXpService.instance.onPageRead(id, _currentPageIndex.value);
+        }
       } else {
         _error.value = 'Livro não encontrado ou formato inválido';
       }
@@ -56,6 +67,14 @@ class ReaderController extends GetxController {
     } finally {
       _isLoading.value = false;
     }
+  }
+
+  void _awardCurrentPageXp() {
+    final id = int.tryParse(_loadedBookId ?? '');
+    if (id == null) return;
+    unawaited(
+      ReadingXpService.instance.onPageRead(id, _currentPageIndex.value),
+    );
   }
 
   List<Map<String, dynamic>> _normalizePages(dynamic rawPages) {
@@ -356,6 +375,7 @@ class ReaderController extends GetxController {
     if (_currentPageIndex.value < (pages.length - 1)) {
       _currentPageIndex.value++;
       _currentStep.value = 0;
+      _awardCurrentPageXp();
     }
   }
 
@@ -363,6 +383,7 @@ class ReaderController extends GetxController {
     if (_currentPageIndex.value > 0) {
       _currentPageIndex.value--;
       _currentStep.value = 0;
+      _awardCurrentPageXp();
     }
   }
 

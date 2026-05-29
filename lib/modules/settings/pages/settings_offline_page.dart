@@ -65,7 +65,7 @@ class _SettingsOfflinePageState extends State<SettingsOfflinePage> {
                 children: [
                   _BackChip(onTap: () => Get.back()),
                   const SizedBox(width: 12),
-                  const Text(
+                  Text(
                     '📦 Conteúdo Offline',
                     style: TextStyle(
                       fontSize: 22,
@@ -139,7 +139,7 @@ class _BackChip extends StatelessWidget {
       child: InkWell(
         customBorder: const CircleBorder(),
         onTap: onTap,
-        child: const SizedBox(
+        child: SizedBox(
           width: 44,
           height: 44,
           child: Icon(Icons.arrow_back, color: AppLayoutTokens.textPrimary),
@@ -175,7 +175,7 @@ class _InfoCard extends StatelessWidget {
         children: [
           Text(
             title,
-            style: const TextStyle(
+            style: TextStyle(
               fontWeight: FontWeight.w800,
               fontSize: 15,
               color: AppLayoutTokens.textPrimary,

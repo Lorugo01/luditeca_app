@@ -9,12 +9,15 @@ class LibraryPatternBackground extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CustomPaint(
-      painter: _SemicirclePatternPainter(
-        baseColor: AppLayoutTokens.scaffoldBackground,
-        dotColor: Colors.white.withAlpha(140),
+    return ClipRect(
+      clipBehavior: Clip.hardEdge,
+      child: CustomPaint(
+        painter: _SemicirclePatternPainter(
+          baseColor: AppLayoutTokens.scaffoldBackground,
+          dotColor: Colors.white.withAlpha(140),
+        ),
+        child: child,
       ),
-      child: child,
     );
   }
 }

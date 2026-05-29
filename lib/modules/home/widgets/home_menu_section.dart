@@ -189,7 +189,7 @@ class _HomeMenuListTile extends StatelessWidget {
               Expanded(
                 child: Text(
                   item.label,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontWeight: FontWeight.w800,
                     fontSize: 15,
                     color: AppLayoutTokens.textPrimary,
@@ -236,7 +236,7 @@ class _HomeMenuLargeTile extends StatelessWidget {
               Expanded(
                 child: Text(
                   item.label,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 17,
                     fontWeight: FontWeight.w800,
                     color: AppLayoutTokens.textPrimary,

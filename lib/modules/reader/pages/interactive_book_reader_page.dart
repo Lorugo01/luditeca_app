@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 
 import '../../../core/controllers/auth_controller.dart';
+import '../../profile/controllers/profile_controller.dart';
 import '../../../core/layout/app_layout_tokens.dart';
 import '../../../core/models/book_model.dart';
 import '../../../core/services/luditeca_api_service.dart';
@@ -10,6 +13,7 @@ import '../controllers/interactive_book_reader_controller.dart';
 import '../models/story_page.dart';
 import '../utils/book_pages_loader.dart';
 import '../utils/reading_progress_helper.dart';
+import '../services/reading_xp_service.dart';
 
 /// Leitor interactivo estilo «Escolha sua aventura» (paridade com
 /// `InteractiveStoryReader.jsx` do Play).
@@ -41,6 +45,7 @@ class _InteractiveBookReaderPageState extends State<InteractiveBookReaderPage> {
   bool _completionRegistered = false;
   bool _sceneRestored = false;
   int? _animatingChoice;
+  Worker? _xpSceneWorker;
 
   @override
   void initState() {
@@ -53,6 +58,8 @@ class _InteractiveBookReaderPageState extends State<InteractiveBookReaderPage> {
 
   @override
   void dispose() {
+    _xpSceneWorker?.dispose();
+    unawaited(ReadingXpService.instance.endSession());
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     final id = _activeBook.id;
     if (Get.isRegistered<InteractiveBookReaderController>(
@@ -109,6 +116,7 @@ class _InteractiveBookReaderPageState extends State<InteractiveBookReaderPage> {
       );
 
       setState(() => _loading = false);
+      _bindReadingXp(loaded.id);
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -116,6 +124,23 @@ class _InteractiveBookReaderPageState extends State<InteractiveBookReaderPage> {
         _loadError = 'Erro ao carregar: $e';
       });
     }
+  }
+
+  void _bindReadingXp(int bookId) {
+    final controller = _controller;
+    if (controller == null || !_authController.isAuthenticated) return;
+
+    _xpSceneWorker?.dispose();
+    ReadingXpService.instance.beginSession(bookId);
+
+    void awardScene() {
+      final idx = controller.currentSceneIndex;
+      if (idx == null) return;
+      unawaited(ReadingXpService.instance.onPageRead(bookId, idx));
+    }
+
+    _xpSceneWorker = ever(controller.runStateRx, (_) => awardScene());
+    awardScene();
   }
 
   void _maybeRestoreScene(InteractiveBookReaderController controller) {
@@ -151,7 +176,11 @@ class _InteractiveBookReaderPageState extends State<InteractiveBookReaderPage> {
     try {
       final userId = _authController.currentUser!['id'].toString();
       await ReadingProgressHelper.clear(_activeBook.id);
-      await _apiService.incrementBooksRead(userId, bookId: _activeBook.id);
+      final gamification =
+          await _apiService.incrementBooksRead(userId, bookId: _activeBook.id);
+      if (Get.isRegistered<ProfileController>()) {
+        Get.find<ProfileController>().applyGamificationResult(gamification);
+      }
     } catch (e) {
       debugPrint('Erro ao registar conclusão (interactive): $e');
     }

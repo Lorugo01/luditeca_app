@@ -52,13 +52,29 @@ class LibraryBooksBody extends StatelessWidget {
     return ListView(
       padding: EdgeInsets.fromLTRB(compact ? 4 : 8, compact ? 12 : 16, compact ? 4 : 8, 32),
       children: [
-        Text(
-          compact ? 'Toque para abrir • Deslize' : 'Toque para abrir • Deslize para ver mais',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: compact ? 11 : 12,
-            fontWeight: FontWeight.w700,
-            color: AppLayoutTokens.textPrimary.withAlpha(153),
+        Center(
+          child: Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: compact ? 12 : 16,
+              vertical: compact ? 6 : 8,
+            ),
+            decoration: BoxDecoration(
+              color: AppLayoutTokens.elevatedSurface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppLayoutTokens.subtleBorder),
+            ),
+            child: Text(
+              compact
+                  ? 'Toque para abrir • Deslize'
+                  : 'Toque para abrir • Deslize para ver mais',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: compact ? 12 : 13,
+                fontWeight: FontWeight.w800,
+                color: AppLayoutTokens.textPrimary,
+                height: 1.25,
+              ),
+            ),
           ),
         ),
         const SizedBox(height: 16),
@@ -120,7 +136,7 @@ class LibraryBooksBody extends StatelessWidget {
                             width: 56,
                             height: 72,
                             color: AppLayoutTokens.primary.withAlpha(51),
-                            child: const Icon(Icons.menu_book, color: AppLayoutTokens.primary),
+                            child: Icon(Icons.menu_book, color: AppLayoutTokens.primary),
                           ),
                   ),
                   const SizedBox(width: 12),
@@ -132,7 +148,7 @@ class LibraryBooksBody extends StatelessWidget {
                           book.title,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontWeight: FontWeight.w800,
                             color: AppLayoutTokens.textPrimary,
                           ),
@@ -142,13 +158,14 @@ class LibraryBooksBody extends StatelessWidget {
                             book.author!,
                             style: TextStyle(
                               fontSize: 12,
-                              color: AppLayoutTokens.textPrimary.withAlpha(153),
+                              fontWeight: FontWeight.w600,
+                              color: AppLayoutTokens.textPrimary,
                             ),
                           ),
                       ],
                     ),
                   ),
-                  const Icon(Icons.chevron_right, color: AppLayoutTokens.primary),
+                  Icon(Icons.chevron_right, color: AppLayoutTokens.primary),
                 ],
               ),
             ),
@@ -206,7 +223,7 @@ class _LibraryCoverTile extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w800,
                       color: AppLayoutTokens.textPrimary,

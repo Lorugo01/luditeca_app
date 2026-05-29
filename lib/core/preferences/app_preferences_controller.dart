@@ -2,6 +2,7 @@ import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../theme.dart';
+import '../theme/app_theme_palette.dart';
 import 'layout_option.dart';
 
 /// Preferências de layout e tema (persistidas localmente).
@@ -14,7 +15,7 @@ class AppPreferencesController extends GetxController {
   final RxString menuLayoutId = 'grid'.obs;
   final RxString activitiesLayoutId = 'grid'.obs;
   final RxString libraryLayoutId = 'shelf'.obs;
-  final RxString appThemeId = 'ocean'.obs;
+  final RxString appThemeId = AppThemeRegistry.defaultId.obs;
 
   @override
   void onInit() {
@@ -27,8 +28,14 @@ class AppPreferencesController extends GetxController {
     menuLayoutId.value = prefs.getString(_keyMenu) ?? 'grid';
     activitiesLayoutId.value = prefs.getString(_keyActivities) ?? 'grid';
     libraryLayoutId.value = prefs.getString(_keyLibrary) ?? 'shelf';
-    appThemeId.value = prefs.getString(_keyTheme) ?? 'ocean';
-    Get.changeTheme(AppTheme.forId(appThemeId.value));
+
+    final storedTheme = AppThemeRegistry.normalizeId(
+      prefs.getString(_keyTheme) ?? AppThemeRegistry.defaultId,
+    );
+    appThemeId.value = storedTheme;
+    AppThemeRegistry.setCurrent(storedTheme);
+    Get.changeTheme(AppTheme.forId(storedTheme));
+    Get.forceAppUpdate();
   }
 
   Future<void> setMenuLayout(String id) async {
@@ -50,9 +57,15 @@ class AppPreferencesController extends GetxController {
   }
 
   Future<void> setAppTheme(String id) async {
-    appThemeId.value = id;
+    final normalized = AppThemeRegistry.normalizeId(id);
+    appThemeId.value = normalized;
+    AppThemeRegistry.setCurrent(normalized);
+    Get.changeTheme(AppTheme.forId(normalized));
+    // Reconstrói toda a árvore para que os tokens (cores) atualizem,
+    // sem destruir o Navigator/Overlay (evita "No Overlay widget found").
+    Get.forceAppUpdate();
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_keyTheme, id);
+    await prefs.setString(_keyTheme, normalized);
   }
 
   String get menuLayoutLabel =>

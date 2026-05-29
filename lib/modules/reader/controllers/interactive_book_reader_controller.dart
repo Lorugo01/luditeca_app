@@ -26,7 +26,15 @@ class InteractiveBookReaderController extends GetxController {
   final RxString _toast = ''.obs;
 
   RunState? get state => _state.value;
+  Rx<RunState?> get runStateRx => _state;
   bool get isLoading => _isLoading.value;
+
+  int? get currentSceneIndex {
+    final page = currentPage;
+    if (page == null) return null;
+    final idx = story.indexWhere((p) => p.id == page.id);
+    return idx < 0 ? null : idx;
+  }
   String get toast => _toast.value;
   Map<int, StoryPage> get pageIndex => _index;
 

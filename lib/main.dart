@@ -36,6 +36,7 @@ Future<void> _logApiReachability() async {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await AppEnv.load();
 
   // Permitir todas as orientações inicialmente
   await SystemChrome.setPreferredOrientations([
@@ -49,9 +50,6 @@ void main() async {
   final apiService = LuditecaApiService();
   await apiService.initialize();
   Get.put(apiService);
-  debugPrint(
-    'AppEnv: env=${AppEnv.appEnv}; dataSource=${AppEnv.dataSource}; api=${AppEnv.apiBaseUrl}',
-  );
   if (kDebugMode && !kIsWeb) {
     try {
       if (Platform.isAndroid) {
@@ -104,8 +102,7 @@ class LudiTecaApp extends StatelessWidget {
 
           final prefs = Get.find<AppPreferencesController>();
 
-          return Obx(
-            () => GetMaterialApp(
+          return GetMaterialApp(
             title: 'LudiTeca',
             theme: AppTheme.forId(prefs.appThemeId.value),
             debugShowCheckedModeBanner: false,
@@ -135,7 +132,6 @@ class LudiTecaApp extends StatelessWidget {
               name: '/login',
               page: () => const LoginPage(),
             ),
-          ),
           );
         },
       ),

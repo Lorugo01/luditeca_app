@@ -61,9 +61,12 @@ const List<_NavItem> _kNavItems = [
 ];
 
 class ResponsiveNavigation extends StatefulWidget {
-  final bool showFavorites;
-
   const ResponsiveNavigation({super.key, this.showFavorites = false});
+
+  static const double railExpandedWidth = 232;
+  static const double railCollapsedWidth = 84;
+
+  final bool showFavorites;
 
   @override
   State<ResponsiveNavigation> createState() => _ResponsiveNavigationState();
@@ -108,7 +111,9 @@ class _ResponsiveNavigationState extends State<ResponsiveNavigation> {
   Widget _buildRail(BuildContext context, int selectedIndex) {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 250),
-      width: _railExpanded ? 232 : 84,
+      width: _railExpanded
+          ? ResponsiveNavigation.railExpandedWidth
+          : ResponsiveNavigation.railCollapsedWidth,
       decoration: BoxDecoration(
         color: AppLayoutTokens.navSurface,
         borderRadius: const BorderRadius.only(

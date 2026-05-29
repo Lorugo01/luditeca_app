@@ -2,57 +2,24 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "LudiTeca (API local)",
+      "name": "LudiTeca",
       "request": "launch",
       "type": "dart",
-      "program": "lib/main.dart",
-      "preLaunchTask": "adb-reverse-api",
-      "args": [
-        "--dart-define=APP_ENV=local",
-        "--dart-define=DATA_SOURCE=vps_api",
-        "--dart-define=API_BASE_URL=http://localhost:3020",
-        "--dart-define=MEDIA_BASE_URL=http://localhost:3020/media",
-        "--dart-define=ANDROID_DEV_HOST=127.0.0.1"
-      ]
+      "program": "lib/main.dart"
     },
     {
-      "name": "LudiTeca (Emulador Android)",
+      "name": "LudiTeca (Android + adb reverse)",
       "request": "launch",
       "type": "dart",
       "program": "lib/main.dart",
-      "preLaunchTask": "adb-reverse-api",
-      "args": [
-        "--dart-define=APP_ENV=local",
-        "--dart-define=DATA_SOURCE=vps_api",
-        "--dart-define=API_BASE_URL=http://localhost:3020",
-        "--dart-define=MEDIA_BASE_URL=http://localhost:3020/media",
-        "--dart-define=ANDROID_DEV_HOST=127.0.0.1"
-      ]
+      "preLaunchTask": "adb-reverse-api"
     },
     {
-      "name": "LudiTeca (Windows)",
+      "name": "LudiTeca (Windows setup)",
       "request": "launch",
       "type": "dart",
       "program": "lib/main.dart",
-      "preLaunchTask": "setup-windows-build",
-      "args": [
-        "--dart-define=APP_ENV=local",
-        "--dart-define=DATA_SOURCE=vps_api",
-        "--dart-define=API_BASE_URL=http://localhost:3020",
-        "--dart-define=MEDIA_BASE_URL=http://localhost:3020/media"
-      ]
-    },
-    {
-      "name": "LudiTeca (Tablet / IP LAN)",
-      "request": "launch",
-      "type": "dart",
-      "program": "lib/main.dart",
-      "args": [
-        "--dart-define=APP_ENV=local",
-        "--dart-define=DATA_SOURCE=vps_api",
-        "--dart-define=API_BASE_URL=http://192.168.18.172:3020",
-        "--dart-define=MEDIA_BASE_URL=http://192.168.18.172:3020/media"
-      ]
+      "preLaunchTask": "setup-windows-build"
     }
   ]
 }

@@ -24,13 +24,20 @@ class AppShellLayout extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppLayoutTokens.scaffoldBackground,
       appBar: appBar,
-      body: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (isLandscape) const ResponsiveNavigation(),
-          Expanded(child: body),
-        ],
-      ),
+      body: isLandscape
+          ? Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const ResponsiveNavigation(),
+                Expanded(
+                  child: ClipRect(
+                    clipBehavior: Clip.hardEdge,
+                    child: body,
+                  ),
+                ),
+              ],
+            )
+          : body,
       bottomNavigationBar: isLandscape ? null : const ResponsiveNavigation(),
       floatingActionButton: floatingActionButton,
     );

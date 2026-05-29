@@ -72,7 +72,7 @@ class _EmptyState extends StatelessWidget {
             Text(
               hasSearch ? 'Nenhum livro encontrado' : 'Nenhum livro na biblioteca',
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w800,
                 color: AppLayoutTokens.textPrimary,
@@ -86,7 +86,8 @@ class _EmptyState extends StatelessWidget {
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 14,
-                color: AppLayoutTokens.textPrimary.withAlpha(153),
+                fontWeight: FontWeight.w600,
+                color: AppLayoutTokens.textPrimary,
               ),
             ),
           ],

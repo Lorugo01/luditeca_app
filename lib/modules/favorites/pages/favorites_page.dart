@@ -17,16 +17,16 @@ class FavoritesPage extends StatelessWidget {
 
     return AppShellLayout(
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              Color(0x33FF6B8A),
-              Color(0x2938BDF8),
+              const Color(0x33FF6B8A),
+              const Color(0x2938BDF8),
               AppLayoutTokens.scaffoldBackground,
             ],
-            stops: [0.0, 0.45, 0.72],
+            stops: const [0.0, 0.45, 0.72],
           ),
         ),
         child: SafeArea(
@@ -103,7 +103,7 @@ class _FavoritesHeader extends StatelessWidget {
             child: InkWell(
               customBorder: const CircleBorder(),
               onTap: onBack,
-              child: const SizedBox(
+              child: SizedBox(
                 width: 44,
                 height: 44,
                 child: Icon(Icons.arrow_back, color: AppLayoutTokens.textPrimary),
@@ -111,7 +111,7 @@ class _FavoritesHeader extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-          const Text(
+          Text(
             '❤️ Minha Lista',
             style: TextStyle(
               fontSize: 24,
@@ -138,7 +138,7 @@ class _FavoritesEmptyState extends StatelessWidget {
           children: [
             const Text('💔', style: TextStyle(fontSize: 72)),
             const SizedBox(height: 16),
-            const Text(
+            Text(
               'Nenhum favorito ainda',
               textAlign: TextAlign.center,
               style: TextStyle(
@@ -168,7 +168,7 @@ class _FavoritesEmptyState extends StatelessWidget {
                 child: Ink(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(20),
-                    gradient: const LinearGradient(
+                    gradient: LinearGradient(
                       colors: [AppLayoutTokens.primary, AppLayoutTokens.accent],
                     ),
                   ),
@@ -304,7 +304,7 @@ class _FavoriteBookCard extends StatelessWidget {
                         book.title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w800,
                           color: AppLayoutTokens.textPrimary,
@@ -331,7 +331,7 @@ class _FavoriteBookCard extends StatelessWidget {
   Widget _coverPlaceholder() {
     return Container(
       alignment: Alignment.center,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [AppLayoutTokens.primary, AppLayoutTokens.accent],
         ),
