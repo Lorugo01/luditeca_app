@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/layout/app_layout_tokens.dart';
@@ -35,10 +36,10 @@ class ProfileAvatarWidget extends StatelessWidget {
           width: radius * 2,
           height: radius * 2,
           child: useNetworkPhoto
-              ? Image.network(
-                  imageUrl,
+              ? CachedNetworkImage(
+                  imageUrl: imageUrl,
                   fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => _fallback(preset),
+                  errorWidget: (_, __, ___) => _fallback(preset),
                 )
               : preset != null
                   ? ProfileAvatarImage(avatar: preset)

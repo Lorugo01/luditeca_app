@@ -1,7 +1,7 @@
 import 'dart:io' show Platform;
 
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
 
 import 'app_env.dart';
 
@@ -33,10 +33,18 @@ class DevApiResolver {
     final port = _extractPort(raw, fallback: 3020);
     final hosts = <String>{AppEnv.androidDevHost, '10.0.2.2'};
 
+    final dio = Dio(
+      BaseOptions(
+        connectTimeout: const Duration(seconds: 2),
+        receiveTimeout: const Duration(seconds: 2),
+        validateStatus: (_) => true,
+      ),
+    );
+
     for (final host in hosts) {
-      final health = Uri.parse('http://$host:$port/health');
+      final health = 'http://$host:$port/health';
       try {
-        final res = await http.get(health).timeout(const Duration(seconds: 2));
+        final res = await dio.get<dynamic>(health);
         if (res.statusCode == 200) {
           _apiBase = 'http://$host:$port';
           _mediaBase = 'http://$host:$port/media';

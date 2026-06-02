@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+
 import '../core/layout/app_layout_tokens.dart';
 import '../core/navigation/app_shell_navigator.dart';
+import '../core/navigation/app_shell_route_scope.dart';
 
 /// Item da navegação principal (equivalente a `NAV_ITEMS` do `BottomNav.jsx` do Play,
 /// com **Favoritos** extra para não regressar funcionalidade do app).
@@ -56,7 +59,7 @@ const List<_NavItem> _kNavItems = [
     route: '/settings',
     emoji: '⚙️',
     label: 'Config.',
-    activeRoots: ['/settings', '/profile'],
+    activeRoots: kSettingsActiveRoots,
   ),
 ];
 
@@ -98,14 +101,17 @@ class _ResponsiveNavigationState extends State<ResponsiveNavigation> {
 
   @override
   Widget build(BuildContext context) {
-    final orientation = MediaQuery.orientationOf(context);
-    final isLandscape = orientation == Orientation.landscape;
-    final selectedIndex = _selectedIndex(AppShellNavigator.currentRoute);
+    final scope = Get.find<AppShellRouteScope>();
+    return Obx(() {
+      final orientation = MediaQuery.orientationOf(context);
+      final isLandscape = orientation == Orientation.landscape;
+      final selectedIndex = _selectedIndex(scope.route.value);
 
-    if (isLandscape) {
-      return _buildRail(context, selectedIndex);
-    }
-    return _buildBottomBar(context, selectedIndex);
+      if (isLandscape) {
+        return _buildRail(context, selectedIndex);
+      }
+      return _buildBottomBar(context, selectedIndex);
+    });
   }
 
   Widget _buildRail(BuildContext context, int selectedIndex) {

@@ -1,12 +1,17 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../../core/layout/app_layout_tokens.dart';
+import '../../../core/layout/book_cover_grid.dart';
 import '../../../core/models/book_model.dart';
 import '../../../core/preferences/app_preferences_controller.dart';
 import '../controllers/library_controller.dart';
 import 'library_layout.dart';
 import 'library_shelf.dart';
+import 'adaptive_cover_tile.dart';
+
+enum _GridLayout { dense, covers }
 
 /// Corpo da biblioteca conforme layout escolhido nas configurações.
 class LibraryBooksBody extends StatelessWidget {
@@ -31,8 +36,8 @@ class LibraryBooksBody extends StatelessWidget {
         onRefresh: controller.loadBooks,
         color: AppLayoutTokens.primary,
         child: switch (layoutId) {
-          'grid' => _buildGrid(context, books, crossAxisCount: 3, aspectRatio: 0.55),
-          'covers' => _buildGrid(context, books, crossAxisCount: 2, aspectRatio: 0.72),
+          'grid' => _buildGrid(context, books, layout: _GridLayout.dense),
+          'covers' => _buildGrid(context, books, layout: _GridLayout.covers),
           'list' => _buildList(context, books),
           _ => _buildShelf(context, books, compact),
         },
@@ -91,19 +96,17 @@ class LibraryBooksBody extends StatelessWidget {
   Widget _buildGrid(
     BuildContext context,
     List<BookModel> books, {
-    required int crossAxisCount,
-    required double aspectRatio,
+    required _GridLayout layout,
   }) {
+    final gridDelegate = switch (layout) {
+      _GridLayout.dense => BookCoverGridDelegate.libraryDense(context),
+      _GridLayout.covers => BookCoverGridDelegate.libraryCovers(context),
+    };
     return GridView.builder(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: crossAxisCount,
-        mainAxisSpacing: 12,
-        crossAxisSpacing: 12,
-        childAspectRatio: aspectRatio,
-      ),
+      gridDelegate: gridDelegate,
       itemCount: books.length,
-      itemBuilder: (context, index) => _LibraryCoverTile(
+      itemBuilder: (context, index) => AdaptiveCoverTile(
         book: books[index],
         onTap: () => controller.openBook(books[index]),
       ),
@@ -131,7 +134,7 @@ class LibraryBooksBody extends StatelessWidget {
                   ClipRRect(
                     borderRadius: BorderRadius.circular(10),
                     child: cover.isNotEmpty
-                        ? Image.network(cover, width: 56, height: 72, fit: BoxFit.cover)
+                        ? CachedNetworkImage(imageUrl: cover, width: 56, height: 72, fit: BoxFit.cover)
                         : Container(
                             width: 56,
                             height: 72,
@@ -172,69 +175,6 @@ class LibraryBooksBody extends StatelessWidget {
           ),
         );
       },
-    );
-  }
-}
-
-class _LibraryCoverTile extends StatelessWidget {
-  const _LibraryCoverTile({required this.book, required this.onTap});
-
-  final BookModel book;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final cover = book.coverImage ?? '';
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: onTap,
-        child: Ink(
-          decoration: BoxDecoration(
-            color: AppLayoutTokens.cardBackground,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: AppLayoutTokens.primary.withAlpha(40),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(
-                  child: cover.isNotEmpty
-                      ? Image.network(cover, fit: BoxFit.cover)
-                      : Container(
-                          color: AppLayoutTokens.primary.withAlpha(40),
-                          alignment: Alignment.center,
-                          child: const Icon(Icons.menu_book, size: 36, color: Colors.white),
-                        ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(8),
-                  child: Text(
-                    book.title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                      color: AppLayoutTokens.textPrimary,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

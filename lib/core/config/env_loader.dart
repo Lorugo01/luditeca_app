@@ -1,39 +1,27 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
-/// Carrega o ficheiro `.env` incluído em `pubspec.yaml` (assets).
+/// Carrega o ficheiro `.env` (asset declarado em `pubspec.yaml`).
+///
+/// Usa o pacote `flutter_dotenv` (parser testado: aspas, escapes, comentários)
+/// em vez de um parser manual. Mantém a mesma API (`load`/`get`) para o resto da app.
 class EnvLoader {
   EnvLoader._();
 
-  static Map<String, String> _values = {};
-
   static Future<void> load() async {
     try {
-      final raw = await rootBundle.loadString('.env');
-      _values = _parse(raw);
+      await dotenv.load(fileName: '.env');
     } catch (e) {
-      debugPrint('EnvLoader: .env ausente ou inválido ($e); defaults do código.');
-      _values = {};
+      // Sem `.env` (ou inválido) a app recorre aos defaults definidos em código.
+      debugPrint('EnvLoader: .env ausente ou inválido ($e); a usar defaults.');
     }
   }
 
-  static String? get(String key) => _values[key];
-
-  static Map<String, String> _parse(String raw) {
-    final out = <String, String>{};
-    for (final line in raw.split('\n')) {
-      final trimmed = line.trim();
-      if (trimmed.isEmpty || trimmed.startsWith('#')) continue;
-      final eq = trimmed.indexOf('=');
-      if (eq <= 0) continue;
-      final key = trimmed.substring(0, eq).trim();
-      var value = trimmed.substring(eq + 1).trim();
-      if ((value.startsWith('"') && value.endsWith('"')) ||
-          (value.startsWith("'") && value.endsWith("'"))) {
-        value = value.substring(1, value.length - 1);
-      }
-      out[key] = value;
-    }
-    return out;
+  /// Devolve o valor da chave (ou `null` se ausente/vazia).
+  static String? get(String key) {
+    if (!dotenv.isInitialized) return null;
+    final value = dotenv.maybeGet(key)?.trim();
+    if (value == null || value.isEmpty) return null;
+    return value;
   }
 }

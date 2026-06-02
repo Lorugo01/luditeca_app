@@ -16,10 +16,42 @@ class AppShellLayout extends StatelessWidget {
   final PreferredSizeWidget? appBar;
   final Widget? floatingActionButton;
 
+  /// Margem mínima no conteúdo (Windows/desktop não reporta notch no [SafeArea]).
+  static const EdgeInsets _contentMinimum = EdgeInsets.fromLTRB(12, 12, 12, 8);
+
+  /// Espaço inferior para scroll acima da barra inferior (portrait).
+  static double scrollBottomPadding(BuildContext context) {
+    final isLandscape =
+        MediaQuery.orientationOf(context) == Orientation.landscape;
+    final inset = MediaQuery.paddingOf(context).bottom;
+    return inset + (isLandscape ? 24 : 88);
+  }
+
+  static Widget safeContent({
+    required BuildContext context,
+    required Widget child,
+    required bool isLandscape,
+  }) {
+    return SafeArea(
+      minimum: _contentMinimum,
+      left: !isLandscape,
+      right: true,
+      top: true,
+      bottom: isLandscape,
+      child: child,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isLandscape =
         MediaQuery.orientationOf(context) == Orientation.landscape;
+
+    final safeBody = safeContent(
+      context: context,
+      isLandscape: isLandscape,
+      child: body,
+    );
 
     return Scaffold(
       backgroundColor: AppLayoutTokens.scaffoldBackground,
@@ -32,12 +64,12 @@ class AppShellLayout extends StatelessWidget {
                 Expanded(
                   child: ClipRect(
                     clipBehavior: Clip.hardEdge,
-                    child: body,
+                    child: safeBody,
                   ),
                 ),
               ],
             )
-          : body,
+          : safeBody,
       bottomNavigationBar: isLandscape ? null : const ResponsiveNavigation(),
       floatingActionButton: floatingActionButton,
     );

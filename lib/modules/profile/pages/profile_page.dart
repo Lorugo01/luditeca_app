@@ -1,9 +1,11 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../../core/layout/app_layout_tokens.dart';
 import '../../../core/navigation/app_shell_navigator.dart';
 import '../../../widgets/app_shell_layout.dart';
+import '../../../widgets/app_subpage_header.dart';
 import '../controllers/profile_controller.dart';
 import '../widgets/profile_avatar_widget.dart';
 
@@ -43,8 +45,7 @@ class _ProfilePageState extends State<ProfilePage> {
     return AppShellLayout(
       body: Container(
         color: AppLayoutTokens.scaffoldBackground,
-        child: SafeArea(
-          child: Obx(() {
+        child: Obx(() {
             if (controller.isLoading.value && controller.userName.value.isEmpty) {
               return const Center(child: CircularProgressIndicator());
             }
@@ -79,12 +80,18 @@ class _ProfilePageState extends State<ProfilePage> {
               color: AppLayoutTokens.primary,
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
+                padding: EdgeInsets.fromLTRB(
+                  16,
+                  0,
+                  16,
+                  AppShellLayout.scrollBottomPadding(context),
+                ),
                 child: Column(
                   children: [
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: IconButton(
+                    AppSubpageHeader(
+                      title: '👤 Meu Perfil',
+                      onBack: () => appSubpageBack(),
+                      trailing: IconButton(
                         onPressed: controller.signOut,
                         tooltip: 'Sair',
                         icon: Icon(
@@ -93,7 +100,7 @@ class _ProfilePageState extends State<ProfilePage> {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 16),
                     Stack(
                       clipBehavior: Clip.none,
                       alignment: Alignment.center,
@@ -205,7 +212,6 @@ class _ProfilePageState extends State<ProfilePage> {
             );
           }),
         ),
-      ),
     );
   }
 }
@@ -317,8 +323,8 @@ class _StatisticsSection extends StatelessWidget {
                     final book = books[index];
                     return ListTile(
                       leading: book['cover_image'] != null
-                          ? Image.network(
-                              book['cover_image'],
+                          ? CachedNetworkImage(
+                              imageUrl: book['cover_image'],
                               width: 40,
                               height: 60,
                               fit: BoxFit.cover,

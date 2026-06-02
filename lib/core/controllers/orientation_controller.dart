@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:get/get.dart';
 
-class OrientationController extends ChangeNotifier {
+/// Controla o bloqueio/desbloqueio de orientação do dispositivo.
+/// Migrado de `ChangeNotifier`/Provider para `GetxController` (estado unificado).
+class OrientationController extends GetxController {
   Orientation _currentOrientation = Orientation.portrait;
   bool _isLocked = false;
 
@@ -11,7 +14,7 @@ class OrientationController extends ChangeNotifier {
   void setOrientation(Orientation orientation) {
     if (_currentOrientation != orientation) {
       _currentOrientation = orientation;
-      notifyListeners();
+      update();
     }
   }
 
@@ -43,6 +46,6 @@ class OrientationController extends ChangeNotifier {
       DeviceOrientation.landscapeLeft,
       DeviceOrientation.landscapeRight,
     ]);
-    notifyListeners();
+    update();
   }
 }

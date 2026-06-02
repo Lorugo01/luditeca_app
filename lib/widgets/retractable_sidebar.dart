@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:get/get.dart';
 import '../core/controllers/auth_controller.dart';
 
 // Enum para identificar a página atual
@@ -117,10 +117,7 @@ class _RetractableSidebarState extends State<RetractableSidebar> {
               label: 'Sair',
               isActive: false,
               onTap: () async {
-                final authController = Provider.of<AuthController>(
-                  context,
-                  listen: false,
-                );
+                final authController = Get.find<AuthController>();
                 final success = await authController.signOut();
                 if (success && context.mounted) {
                   Navigator.of(context).pushReplacementNamed('/login');

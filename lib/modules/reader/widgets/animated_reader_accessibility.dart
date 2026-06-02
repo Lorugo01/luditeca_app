@@ -83,18 +83,14 @@ class AnimatedReaderAccessibilityPanel extends StatelessWidget {
     super.key,
     required this.fontSize,
     required this.colorMode,
-    required this.isSpeaking,
     required this.onFontSizeChanged,
     required this.onColorModeChanged,
-    required this.onSpeakToggle,
   });
 
   final double fontSize;
   final ReaderColorMode colorMode;
-  final bool isSpeaking;
   final ValueChanged<double> onFontSizeChanged;
   final ValueChanged<ReaderColorMode> onColorModeChanged;
-  final VoidCallback onSpeakToggle;
 
   static const _modes = [
     (ReaderColorMode.normal, 'Normal', Icons.wb_sunny_outlined),
@@ -204,34 +200,6 @@ class AnimatedReaderAccessibilityPanel extends StatelessWidget {
                   ),
                 );
               }).toList(),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'NARRAÇÃO DE VOZ',
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w800,
-                color: Colors.grey,
-                letterSpacing: 1,
-              ),
-            ),
-            const SizedBox(height: 8),
-            FilledButton.icon(
-              onPressed: onSpeakToggle,
-              style: FilledButton.styleFrom(
-                backgroundColor:
-                    isSpeaking ? const Color(0xFFFC8181) : const Color(0xFF48BB78),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
-              icon: Icon(isSpeaking ? Icons.volume_off : Icons.volume_up),
-              label: Text(
-                isSpeaking ? 'Parar Narração' : 'Ler em Voz Alta',
-                style: const TextStyle(fontWeight: FontWeight.w700),
-              ),
             ),
           ],
         ),

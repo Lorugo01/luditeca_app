@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -58,33 +59,31 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       body: Stack(
         children: [
           _HomeBackground(),
-          SafeArea(
-            child: RefreshIndicator(
-              onRefresh: homeController.refreshData,
-              color: AppLayoutTokens.primary,
-              child: CustomScrollView(
-                physics: const AlwaysScrollableScrollPhysics(
-                  parent: BouncingScrollPhysics(),
-                ),
-                slivers: [
-                  SliverToBoxAdapter(child: _buildHeader(context)),
-                  SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                    sliver: SliverToBoxAdapter(
-                      child: HomeContinueSection(controller: homeController),
-                    ),
-                  ),
-                  SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-                    sliver: const SliverToBoxAdapter(child: HomeMenuSection()),
-                  ),
-                  SliverPadding(
-                    padding: EdgeInsets.only(
-                      bottom: MediaQuery.paddingOf(context).bottom + 88,
-                    ),
-                  ),
-                ],
+          RefreshIndicator(
+            onRefresh: homeController.refreshData,
+            color: AppLayoutTokens.primary,
+            child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(
+                parent: BouncingScrollPhysics(),
               ),
+              slivers: [
+                SliverToBoxAdapter(child: _buildHeader(context)),
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  sliver: SliverToBoxAdapter(
+                    child: HomeContinueSection(controller: homeController),
+                  ),
+                ),
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                  sliver: const SliverToBoxAdapter(child: HomeMenuSection()),
+                ),
+                SliverPadding(
+                  padding: EdgeInsets.only(
+                    bottom: AppShellLayout.scrollBottomPadding(context),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -274,12 +273,12 @@ class _Avatar extends StatelessWidget {
     if (url.isNotEmpty) {
       child = ClipRRect(
         borderRadius: BorderRadius.circular(18),
-        child: Image.network(
-          url,
+        child: CachedNetworkImage(
+          imageUrl: url,
           width: 64,
           height: 64,
           fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => _fallback(),
+          errorWidget: (_, __, ___) => _fallback(),
         ),
       );
     } else {

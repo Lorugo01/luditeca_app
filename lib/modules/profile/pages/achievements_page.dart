@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 
 import '../../../core/layout/app_layout_tokens.dart';
 import '../../../widgets/app_shell_layout.dart';
+import '../../../widgets/app_subpage_header.dart';
 import '../controllers/profile_controller.dart';
 import '../data/profile_achievements.dart';
 
@@ -31,17 +32,31 @@ class _AchievementsPageState extends State<AchievementsPage> {
     return AppShellLayout(
       body: Container(
         color: AppLayoutTokens.scaffoldBackground,
-        child: SafeArea(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _Header(onBack: () => Get.back()),
-              _CategoryChips(
-                selected: _filter,
-                onSelected: (c) => setState(() => _filter = c),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: AppSubpageHeader(
+                title: '🏆 Conquistas',
+                onBack: () => appSubpageBack(),
+                subtitle: Obx(() {
+                  final unlocked = controller.achievements
+                      .where((a) => a.unlocked && !a.def.comingSoon)
+                      .length;
+                  final total = controller.achievements
+                      .where((a) => !a.def.comingSoon)
+                      .length;
+                  return Text('$unlocked de $total desbloqueadas');
+                }),
               ),
-              Expanded(
-                child: Obx(() {
+            ),
+            _CategoryChips(
+              selected: _filter,
+              onSelected: (c) => setState(() => _filter = c),
+            ),
+            Expanded(
+              child: Obx(() {
                   if (controller.achievementsLoading.value &&
                       controller.achievements.isEmpty) {
                     return const Center(child: CircularProgressIndicator());
@@ -68,7 +83,12 @@ class _AchievementsPageState extends State<AchievementsPage> {
                     onRefresh: controller.loadAchievements,
                     color: AppLayoutTokens.primary,
                     child: ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
+                      padding: EdgeInsets.fromLTRB(
+                        16,
+                        8,
+                        16,
+                        AppShellLayout.scrollBottomPadding(context),
+                      ),
                       itemCount: items.length,
                       separatorBuilder: (_, __) => const SizedBox(height: 10),
                       itemBuilder: (context, index) {
@@ -79,71 +99,7 @@ class _AchievementsPageState extends State<AchievementsPage> {
                 }),
               ),
             ],
-          ),
         ),
-      ),
-    );
-  }
-}
-
-class _Header extends StatelessWidget {
-  const _Header({required this.onBack});
-
-  final VoidCallback onBack;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 8, 16, 8),
-      child: Row(
-        children: [
-          Material(
-            color: AppLayoutTokens.cardBackground,
-            shape: const CircleBorder(),
-            elevation: 2,
-            child: InkWell(
-              customBorder: const CircleBorder(),
-              onTap: onBack,
-              child: SizedBox(
-                width: 44,
-                height: 44,
-                child: Icon(Icons.arrow_back_rounded, color: AppLayoutTokens.textPrimary),
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Obx(() {
-              final c = Get.find<ProfileController>();
-              final unlocked =
-                  c.achievements.where((a) => a.unlocked && !a.def.comingSoon).length;
-              final total = c.achievements
-                  .where((a) => !a.def.comingSoon)
-                  .length;
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '🏆 Conquistas',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                      color: AppLayoutTokens.primary,
-                    ),
-                  ),
-                  Text(
-                    '$unlocked de $total desbloqueadas',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: AppLayoutTokens.textPrimary,
-                    ),
-                  ),
-                ],
-              );
-            }),
-          ),
-        ],
       ),
     );
   }

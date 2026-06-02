@@ -4,27 +4,33 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:http/http.dart' as http;
-import 'package:provider/provider.dart';
+import 'package:dio/dio.dart';
 import 'package:get/get.dart';
 import 'core/services/luditeca_api_service.dart';
 import 'core/config/app_env.dart';
 import 'core/config/dev_api_resolver.dart';
 import 'core/theme.dart';
 import 'core/controllers/auth_controller.dart';
-import 'core/controllers/orientation_controller.dart';
 import 'core/pages/login_page.dart';
 import 'modules/home/pages/home_page.dart';
 import 'modules/library/pages/library_page.dart';
 import 'modules/library/pages/category_books_page.dart';
 import 'modules/library/controllers/library_controller.dart';
 import 'core/preferences/app_preferences_controller.dart';
+import 'core/navigation/app_shell_route_scope.dart';
 import 'routes/app_pages.dart';
 
 Future<void> _logApiReachability() async {
   final url = '${DevApiResolver.apiBaseUrl}/health';
   try {
-    final res = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 4));
+    final dio = Dio(
+      BaseOptions(
+        connectTimeout: const Duration(seconds: 4),
+        receiveTimeout: const Duration(seconds: 4),
+        validateStatus: (_) => true,
+      ),
+    );
+    final res = await dio.get<dynamic>(url);
     debugPrint('API health: $url -> ${res.statusCode}');
   } catch (e) {
     debugPrint(
@@ -69,11 +75,7 @@ class LudiTecaApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => OrientationController()),
-      ],
-      child: GetX<AuthController>(
+    return GetX<AuthController>(
         init: AuthController(),
         builder: (authController) {
           // Mostrar splash screen durante o carregamento inicial
@@ -108,6 +110,11 @@ class LudiTecaApp extends StatelessWidget {
             debugShowCheckedModeBanner: false,
             defaultTransition: Transition.fadeIn,
             transitionDuration: const Duration(milliseconds: 180),
+            routingCallback: (routing) {
+              if (Get.isRegistered<AppShellRouteScope>()) {
+                Get.find<AppShellRouteScope>().sync();
+              }
+            },
             home:
                 authController.isAuthenticated
                     ? const HomePage()
@@ -134,7 +141,6 @@ class LudiTecaApp extends StatelessWidget {
             ),
           );
         },
-      ),
     );
   }
 }

@@ -112,11 +112,33 @@ class InteractiveBookReaderController extends GetxController {
     final target = choice.targetPageId;
     final s = state;
     if (target == null || s == null) return;
-    var next = s;
+
+    final currentId = s.currentPageId;
+    final currentIdx =
+        currentId != null ? s.history.indexOf(currentId) : s.history.length - 1;
+    final baseHistory = currentIdx >= 0
+        ? s.history.sublist(0, currentIdx + 1)
+        : List<int>.from(s.history);
+
+    var next = s.copyWith(history: baseHistory);
     if (choice.effects != null) {
       next = applyEffects(next, choice.effects);
     }
     next = navigateToPage(next, target, story);
+    _state.value = next;
+    _persist(next);
+  }
+
+  /// Navega no histórico da aventura (folhear páginas já visitadas).
+  void seekToHistoryIndex(int index) {
+    final s = state;
+    if (s == null || index < 0 || index >= s.history.length) return;
+    final pageId = s.history[index];
+    if (pageId == s.currentPageId) return;
+    final next = s.copyWith(
+      currentPageId: pageId,
+      savedAt: DateTime.now().toIso8601String(),
+    );
     _state.value = next;
     _persist(next);
   }

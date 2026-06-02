@@ -7,10 +7,8 @@ import '../../../core/navigation/app_shell_navigator.dart';
 import '../../../core/preferences/app_preferences_controller.dart';
 import '../../../core/preferences/layout_option.dart';
 import '../../../widgets/app_shell_layout.dart';
+import '../../../widgets/app_subpage_header.dart';
 import '../widgets/settings_layout_picker_sheet.dart';
-import 'settings_offline_page.dart';
-import 'theme_picker_page.dart';
-
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
 
@@ -21,11 +19,18 @@ class SettingsPage extends StatelessWidget {
     return AppShellLayout(
       body: Container(
         color: AppLayoutTokens.scaffoldBackground,
-        child: SafeArea(
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 88),
-            children: [
-              _SettingsHeader(onBack: AppShellNavigator.goToHome),
+        child: ListView(
+          padding: EdgeInsets.fromLTRB(
+            16,
+            0,
+            16,
+            AppShellLayout.scrollBottomPadding(context),
+          ),
+          children: [
+            AppSubpageHeader(
+              title: '⚙️ Configurações',
+              onBack: AppShellNavigator.goToHome,
+            ),
               const SizedBox(height: 20),
               _SettingsLinksCard(
                 items: [
@@ -39,7 +44,7 @@ class SettingsPage extends StatelessWidget {
                     emoji: '🎨',
                     title: 'Temas',
                     subtitle: 'Cores e visual do app',
-                    onTap: () => Get.to(() => const ThemePickerPage()),
+                    onTap: () => Get.toNamed('/settings/themes'),
                   ),
                   _SettingsLinkItem(
                     emoji: '🏆',
@@ -51,7 +56,7 @@ class SettingsPage extends StatelessWidget {
                     emoji: '📦',
                     title: 'Conteúdo Offline',
                     subtitle: 'Baixar livros e jogos',
-                    onTap: () => Get.to(() => const SettingsOfflinePage()),
+                    onTap: () => Get.toNamed('/settings/offline'),
                     showDivider: false,
                   ),
                 ],
@@ -63,7 +68,6 @@ class SettingsPage extends StatelessWidget {
                 onTap: () => _showDeleteAccountFlow(context),
               ),
             ],
-          ),
         ),
       ),
     );
@@ -259,43 +263,6 @@ class _SettingsLayoutShortcuts extends StatelessWidget {
         },
       );
     });
-  }
-}
-
-class _SettingsHeader extends StatelessWidget {
-  const _SettingsHeader({required this.onBack});
-
-  final VoidCallback onBack;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Material(
-          color: AppLayoutTokens.cardBackground,
-          shape: const CircleBorder(),
-          elevation: 2,
-          child: InkWell(
-            customBorder: const CircleBorder(),
-            onTap: onBack,
-            child: SizedBox(
-              width: 44,
-              height: 44,
-              child: Icon(Icons.arrow_back, color: AppLayoutTokens.textPrimary),
-            ),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Text(
-          '⚙️ Configurações',
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.w800,
-            color: AppLayoutTokens.primary,
-          ),
-        ),
-      ],
-    );
   }
 }
 

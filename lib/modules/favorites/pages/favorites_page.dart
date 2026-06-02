@@ -1,7 +1,9 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../../core/layout/app_layout_tokens.dart';
+import '../../../core/layout/book_cover_grid.dart';
 import '../../../core/models/book_model.dart';
 import '../../../core/navigation/app_shell_navigator.dart';
 import '../../../widgets/app_shell_layout.dart';
@@ -29,12 +31,11 @@ class FavoritesPage extends StatelessWidget {
             stops: const [0.0, 0.45, 0.72],
           ),
         ),
-        child: SafeArea(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _FavoritesHeader(onBack: AppShellNavigator.goToHome),
-              Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _FavoritesHeader(onBack: AppShellNavigator.goToHome),
+            Expanded(
                 child: Obx(() {
                   if (controller.isLoading.value) {
                     return const Center(child: CircularProgressIndicator());
@@ -55,13 +56,13 @@ class FavoritesPage extends StatelessWidget {
                     onRefresh: controller.loadFavorites,
                     color: AppLayoutTokens.primary,
                     child: GridView.builder(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 2,
-                        mainAxisSpacing: 14,
-                        crossAxisSpacing: 14,
-                        childAspectRatio: 0.62,
+                      padding: EdgeInsets.fromLTRB(
+                        16,
+                        0,
+                        16,
+                        AppShellLayout.scrollBottomPadding(context),
                       ),
+                      gridDelegate: BookCoverGridDelegate.favorites(context),
                       itemCount: controller.favoriteBooks.length,
                       itemBuilder: (context, index) {
                         final book = controller.favoriteBooks[index];
@@ -76,8 +77,7 @@ class FavoritesPage extends StatelessWidget {
                   );
                 }),
               ),
-            ],
-          ),
+          ],
         ),
       ),
     );
@@ -268,10 +268,10 @@ class _FavoriteBookCard extends StatelessWidget {
                     fit: StackFit.expand,
                     children: [
                       if (cover.isNotEmpty)
-                        Image.network(
-                          cover,
+                        CachedNetworkImage(
+                          imageUrl: cover,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => _coverPlaceholder(),
+                          errorWidget: (_, __, ___) => _coverPlaceholder(),
                         )
                       else
                         _coverPlaceholder(),

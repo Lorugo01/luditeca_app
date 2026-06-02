@@ -5,6 +5,7 @@ enum AnimatedSlotKind { page, quiz }
 class AnimatedPage {
   final String? imageUrl;
   final String? text;
+  final String? narrationUrl;
   final bool isGif;
   final int pageNumber;
 
@@ -12,6 +13,7 @@ class AnimatedPage {
     required this.pageNumber,
     this.imageUrl,
     this.text,
+    this.narrationUrl,
     this.isGif = false,
   });
 
@@ -20,6 +22,7 @@ class AnimatedPage {
     final pageNumber = pageNumberRaw is int
         ? pageNumberRaw
         : int.tryParse('${pageNumberRaw ?? ''}') ?? fallbackIndex;
+    final narrationRaw = json['narration_url'] ?? json['narrationUrl'];
     return AnimatedPage(
       pageNumber: pageNumber,
       imageUrl: (json['image_url'] ?? '').toString().trim().isEmpty
@@ -28,6 +31,9 @@ class AnimatedPage {
       text: (json['text'] ?? '').toString().trim().isEmpty
           ? null
           : (json['text'] as Object).toString(),
+      narrationUrl: narrationRaw == null || '$narrationRaw'.trim().isEmpty
+          ? null
+          : '$narrationRaw'.trim(),
       isGif: json['is_gif'] == true || json['mediaKind'] == 'gif',
     );
   }

@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
@@ -18,25 +19,22 @@ class ProfileAvatarImage extends StatelessWidget {
   Widget build(BuildContext context) {
     return ColoredBox(
       color: Color(avatar.backgroundColor),
-      child: Image.network(
-        avatar.pngUrl,
+      child: CachedNetworkImage(
+        imageUrl: avatar.pngUrl,
         fit: fit,
         width: double.infinity,
         height: double.infinity,
-        loadingBuilder: (context, child, progress) {
-          if (progress == null) return child;
-          return Center(
-            child: SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: Color(avatar.backgroundColor).withAlpha(200),
-              ),
+        placeholder: (_, __) => Center(
+          child: SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: Color(avatar.backgroundColor).withAlpha(200),
             ),
-          );
-        },
-        errorBuilder: (_, __, ___) => SvgPicture.network(
+          ),
+        ),
+        errorWidget: (_, __, ___) => SvgPicture.network(
           avatar.svgUrl,
           fit: fit,
           placeholderBuilder: (_) => _letterFallback(),

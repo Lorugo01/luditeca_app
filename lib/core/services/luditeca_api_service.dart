@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:http/http.dart' as http;
+import 'package:dio/dio.dart';
 import 'dart:convert';
 import '../config/dev_api_resolver.dart';
 import '../utils/media_url.dart';
@@ -27,17 +27,80 @@ class LuditecaApiService {
 
   Future<SharedPreferences> get _prefs async => SharedPreferences.getInstance();
 
-  Map<String, String> _headers({bool withAuth = true}) {
-    final headers = <String, String>{'Content-Type': 'application/json'};
-    if (withAuth && isAuthenticated) {
-      headers['Authorization'] = 'Bearer $_token';
-    }
-    return headers;
+  /// Cliente HTTP único: timeouts globais + injeção automática do token.
+  late final Dio _dio = _createDio();
+
+  Dio _createDio() {
+    final dio = Dio(
+      BaseOptions(
+        connectTimeout: const Duration(seconds: 15),
+        receiveTimeout: const Duration(seconds: 30),
+        sendTimeout: const Duration(seconds: 30),
+        contentType: 'application/json',
+        responseType: ResponseType.json,
+        // Erros são tratados manualmente para mensagens amigáveis.
+        validateStatus: (status) =>
+            status != null && status >= 200 && status < 300,
+      ),
+    );
+    dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) {
+          final withAuth = options.extra['withAuth'] != false;
+          if (withAuth && isAuthenticated) {
+            options.headers['Authorization'] = 'Bearer $_token';
+          }
+          handler.next(options);
+        },
+      ),
+    );
+    return dio;
   }
 
-  Uri _uri(String path, [Map<String, String>? query]) {
+  String _absoluteUrl(String path) {
     final normalizedPath = path.startsWith('/') ? path : '/$path';
-    return Uri.parse('$_baseUrl$normalizedPath').replace(queryParameters: query);
+    return '$_baseUrl$normalizedPath';
+  }
+
+  String _dioErrorMessage(DioException e, String method, String path) {
+    final data = e.response?.data;
+    if (data is Map && data['error'] != null) {
+      return '${data['error']}';
+    }
+    switch (e.type) {
+      case DioExceptionType.connectionTimeout:
+      case DioExceptionType.sendTimeout:
+      case DioExceptionType.receiveTimeout:
+        return 'Tempo de ligação esgotado. Verifique a sua internet.';
+      case DioExceptionType.connectionError:
+        return 'Não foi possível ligar ao servidor.';
+      default:
+        final code = e.response?.statusCode;
+        return 'Falha na requisição ($method $path)'
+            '${code != null ? ': $code' : ''}';
+    }
+  }
+
+  Future<Response<dynamic>> _send(
+    String method,
+    String path, {
+    Map<String, dynamic>? body,
+    Map<String, String>? query,
+    bool withAuth = true,
+  }) async {
+    try {
+      return await _dio.request<dynamic>(
+        _absoluteUrl(path),
+        data: body,
+        queryParameters: query,
+        options: Options(
+          method: method.toUpperCase(),
+          extra: {'withAuth': withAuth},
+        ),
+      );
+    } on DioException catch (e) {
+      throw Exception(_dioErrorMessage(e, method, path));
+    }
   }
 
   Future<Map<String, dynamic>> _requestJson(
@@ -47,58 +110,20 @@ class LuditecaApiService {
     Map<String, String>? query,
     bool withAuth = true,
   }) async {
-    final uri = _uri(path, query);
-    http.Response response;
-    final headers = _headers(withAuth: withAuth);
-
-    switch (method.toUpperCase()) {
-      case 'GET':
-        response = await http.get(uri, headers: headers);
-        break;
-      case 'POST':
-        response = await http.post(
-          uri,
-          headers: headers,
-          body: body != null ? jsonEncode(body) : null,
-        );
-        break;
-      case 'PATCH':
-        response = await http.patch(
-          uri,
-          headers: headers,
-          body: body != null ? jsonEncode(body) : null,
-        );
-        break;
-      case 'PUT':
-        response = await http.put(
-          uri,
-          headers: headers,
-          body: body != null ? jsonEncode(body) : null,
-        );
-        break;
-      case 'DELETE':
-        response = await http.delete(
-          uri,
-          headers: headers,
-          body: body != null ? jsonEncode(body) : null,
-        );
-        break;
-      default:
-        throw Exception('Método HTTP não suportado: $method');
+    final response = await _send(
+      method,
+      path,
+      body: body,
+      query: query,
+      withAuth: withAuth,
+    );
+    final data = response.data;
+    if (data == null || (data is String && data.isEmpty)) {
+      return <String, dynamic>{};
     }
-
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      final errorBody = response.body.isNotEmpty ? jsonDecode(response.body) : null;
-      final msg = (errorBody is Map && errorBody['error'] != null)
-          ? '${errorBody['error']}'
-          : 'Falha na requisição ($method $path): ${response.statusCode}';
-      throw Exception(msg);
-    }
-
-    if (response.body.isEmpty) return <String, dynamic>{};
-    final decoded = jsonDecode(response.body);
-    if (decoded is Map<String, dynamic>) return decoded;
-    return {'data': decoded};
+    if (data is Map<String, dynamic>) return data;
+    if (data is Map) return Map<String, dynamic>.from(data);
+    return {'data': data};
   }
 
   Future<List<dynamic>> _requestList(
@@ -108,35 +133,17 @@ class LuditecaApiService {
     Map<String, String>? query,
     bool withAuth = true,
   }) async {
-    final uri = _uri(path, query);
-    http.Response response;
-    final headers = _headers(withAuth: withAuth);
-
-    if (method.toUpperCase() == 'GET') {
-      response = await http.get(uri, headers: headers);
-    } else if (method.toUpperCase() == 'POST') {
-      response = await http.post(
-        uri,
-        headers: headers,
-        body: body != null ? jsonEncode(body) : null,
-      );
-    } else {
-      throw Exception('Método não suportado para lista: $method');
-    }
-
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      final errorBody = response.body.isNotEmpty ? jsonDecode(response.body) : null;
-      final msg = (errorBody is Map && errorBody['error'] != null)
-          ? '${errorBody['error']}'
-          : 'Falha na requisição ($method $path): ${response.statusCode}';
-      throw Exception(msg);
-    }
-
-    if (response.body.isEmpty) return <dynamic>[];
-    final decoded = jsonDecode(response.body);
-    if (decoded is List) return decoded;
-    if (decoded is Map<String, dynamic> && decoded['data'] is List) {
-      return decoded['data'] as List<dynamic>;
+    final response = await _send(
+      method,
+      path,
+      body: body,
+      query: query,
+      withAuth: withAuth,
+    );
+    final data = response.data;
+    if (data is List) return data;
+    if (data is Map && data['data'] is List) {
+      return data['data'] as List<dynamic>;
     }
     return <dynamic>[];
   }
@@ -231,6 +238,13 @@ class LuditecaApiService {
         final img = p['image_url'] ?? p['imageUrl'];
         if (img != null && '$img'.trim().isNotEmpty) {
           p['image_url'] = _ensureAbsoluteMediaUrl('$img', defaultBucket: 'pages');
+        }
+        final narration = p['narration_url'] ?? p['narrationUrl'];
+        if (narration != null && '$narration'.trim().isNotEmpty) {
+          p['narration_url'] = _ensureAbsoluteMediaUrl(
+            '$narration',
+            defaultBucket: 'audios',
+          );
         }
         return p;
       }).toList();
@@ -651,33 +665,30 @@ class LuditecaApiService {
   }) async {
     if (!isAuthenticated) throw Exception('Usuário não autenticado.');
 
-    final uri = _uri('/media/upload', {'mediaType': 'avatar', 'root': 'profile'});
-    final request = http.MultipartRequest('POST', uri)
-      ..headers.addAll({'Authorization': 'Bearer $_token'})
-      ..files.add(
-        http.MultipartFile.fromBytes(
-          'file',
-          bytes,
-          filename: fileName,
-        ),
-      );
+    final formData = FormData.fromMap({
+      'file': MultipartFile.fromBytes(bytes, filename: fileName),
+    });
 
-    final streamed = await request.send();
-    final response = await http.Response.fromStream(streamed);
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      final decoded = response.body.isNotEmpty ? jsonDecode(response.body) : null;
-      final msg = (decoded is Map && decoded['error'] != null)
-          ? '${decoded['error']}'
-          : 'Falha no upload da imagem.';
-      throw Exception(msg);
+    try {
+      final response = await _dio.post<dynamic>(
+        _absoluteUrl('/media/upload'),
+        queryParameters: const {'mediaType': 'avatar', 'root': 'profile'},
+        data: formData,
+      );
+      final data = response.data is Map
+          ? Map<String, dynamic>.from(response.data as Map)
+          : <String, dynamic>{};
+      final payload = data['data'] is Map
+          ? Map<String, dynamic>.from(data['data'] as Map)
+          : <String, dynamic>{};
+      final url = payload['url']?.toString();
+      if (url == null || url.isEmpty) {
+        throw Exception('Upload concluído sem URL de retorno.');
+      }
+      return url;
+    } on DioException catch (e) {
+      throw Exception(_dioErrorMessage(e, 'POST', '/media/upload'));
     }
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
-    final payload = data['data'] as Map<String, dynamic>? ?? {};
-    final url = payload['url']?.toString();
-    if (url == null || url.isEmpty) {
-      throw Exception('Upload concluído sem URL de retorno.');
-    }
-    return url;
   }
 
   Future<List<Map<String, dynamic>>> fetchBooksByIds(List<int> ids) async {

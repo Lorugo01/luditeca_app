@@ -1,11 +1,12 @@
 import 'dart:async';
+import 'dart:io';
 
+import 'package:dio/dio.dart';
 import 'package:epub_view/epub_view.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:http/http.dart' as http;
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
@@ -15,6 +16,7 @@ import '../../../core/models/book_model.dart';
 import '../../../core/services/luditeca_api_service.dart';
 import '../utils/book_pages_loader.dart';
 import '../utils/reading_progress_helper.dart';
+import '../services/book_offline_cache.dart';
 import '../services/reading_xp_service.dart';
 
 enum _DigitalView { pdf, epub, empty, loading }
@@ -36,6 +38,15 @@ class DigitalBookReaderPage extends StatefulWidget {
 class _DigitalBookReaderPageState extends State<DigitalBookReaderPage> {
   late final AuthController _authController;
   late final LuditecaApiService _apiService;
+
+  /// Download de PDF/EPUB (ficheiros públicos, sem token).
+  final Dio _mediaDio = Dio(
+    BaseOptions(
+      connectTimeout: const Duration(seconds: 15),
+      receiveTimeout: const Duration(seconds: 60),
+      responseType: ResponseType.bytes,
+    ),
+  );
 
   BookModel? _book;
   _DigitalView _view = _DigitalView.loading;
@@ -232,21 +243,49 @@ class _DigitalBookReaderPageState extends State<DigitalBookReaderPage> {
       _pdfZoom = _defaultPdfZoom;
     });
 
+    final cachedPath =
+        await BookOfflineCache.instance.cachedPdfPath(_activeBook.id);
+    if (cachedPath != null) {
+      await _loadPdfFromFile(cachedPath);
+      return;
+    }
+
     // Em Windows/Web o viewer nativo por URL falha com frequência; bytes via HTTP é mais fiável.
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.windows) {
       await _loadPdfBytes(url);
     }
   }
 
+  Future<void> _loadPdfFromFile(String path) async {
+    try {
+      final bytes = await File(path).readAsBytes();
+      if (!mounted) return;
+      setState(() {
+        _pdfBytes = Uint8List.fromList(bytes);
+        _pdfUseMemory = true;
+        _pdfError = null;
+      });
+    } catch (e) {
+      debugPrint('PDF local falhou: $e');
+      if (!mounted) return;
+      setState(() => _pdfError = 'Não foi possível abrir o PDF guardado.');
+    }
+  }
+
   Future<void> _loadPdfBytes(String url) async {
     try {
-      final response = await http.get(Uri.parse(url));
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw Exception('HTTP ${response.statusCode}');
+      final response = await _mediaDio.get<List<int>>(url);
+      final status = response.statusCode ?? 0;
+      if (status < 200 || status >= 300) {
+        throw Exception('HTTP $status');
+      }
+      final bytes = response.data;
+      if (bytes == null || bytes.isEmpty) {
+        throw Exception('PDF vazio.');
       }
       if (!mounted) return;
       setState(() {
-        _pdfBytes = Uint8List.fromList(response.bodyBytes);
+        _pdfBytes = Uint8List.fromList(bytes);
         _pdfUseMemory = true;
         _pdfError = null;
       });
@@ -297,11 +336,16 @@ class _DigitalBookReaderPageState extends State<DigitalBookReaderPage> {
     if (url == null || url.isEmpty) return;
     setState(() => _epubError = null);
     try {
-      final response = await http.get(Uri.parse(url));
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw Exception('HTTP ${response.statusCode}');
+      final response = await _mediaDio.get<List<int>>(url);
+      final status = response.statusCode ?? 0;
+      if (status < 200 || status >= 300) {
+        throw Exception('HTTP $status');
       }
-      final bytes = Uint8List.fromList(response.bodyBytes);
+      final data = response.data;
+      if (data == null || data.isEmpty) {
+        throw Exception('EPUB vazio.');
+      }
+      final bytes = Uint8List.fromList(data);
       if (!mounted) return;
       setState(() {
         _epubController?.dispose();

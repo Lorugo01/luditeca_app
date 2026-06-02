@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:get/get.dart';
 import '../controllers/auth_controller.dart';
 
 class RegisterPage extends StatefulWidget {
@@ -27,8 +27,8 @@ class _RegisterPageState extends State<RegisterPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Criar Conta')),
-      body: Consumer<AuthController>(
-        builder: (context, authController, _) {
+      body: Obx(() {
+          final authController = Get.find<AuthController>();
           return Center(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(24.0),
@@ -163,8 +163,7 @@ class _RegisterPageState extends State<RegisterPage> {
               ),
             ),
           );
-        },
-      ),
+        }),
     );
   }
 }

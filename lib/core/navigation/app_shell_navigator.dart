@@ -1,5 +1,14 @@
 import 'package:get/get.dart';
 
+/// Rotas em que a aba **Configurações** deve permanecer activa.
+const List<String> kSettingsActiveRoots = [
+  '/settings',
+  '/settings/themes',
+  '/settings/offline',
+  '/profile',
+  '/achievements',
+];
+
 /// Navegação entre abas principais sem reanimar a aba já activa.
 abstract final class AppShellNavigator {
   /// Rota actual normalizada (`/` → `/home`).
@@ -8,6 +17,9 @@ abstract final class AppShellNavigator {
     if (raw == '/' || raw.isEmpty) return '/home';
     return raw;
   }
+
+  static bool get isOnSettingsFlow =>
+      isTabActive(kSettingsActiveRoots);
 
   static bool isTabActive(List<String> activeRoots) {
     final current = currentRoute;
@@ -46,5 +58,5 @@ abstract final class AppShellNavigator {
   static void goToActivities() =>
       goToTab(route: '/activities', activeRoots: const ['/activities']);
   static void goToSettings() =>
-      goToTab(route: '/settings', activeRoots: const ['/settings', '/profile']);
+      goToTab(route: '/settings', activeRoots: kSettingsActiveRoots);
 }

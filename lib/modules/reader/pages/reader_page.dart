@@ -17,6 +17,9 @@ import '../../../core/controllers/auth_controller.dart';
 import '../../profile/controllers/profile_controller.dart';
 import '../../../core/services/luditeca_api_service.dart';
 import '../services/reading_xp_service.dart';
+import '../widgets/offline_book_image.dart';
+import '../services/book_offline_cache.dart';
+import '../services/book_offline_session.dart';
 
 // Dimensões do canvas (ex: 1280x720 para 16:9)
 const double canvasWidth = 1280;
@@ -74,6 +77,17 @@ class _ReaderPageState extends State<ReaderPage> {
 
     // Adicionar livro em progresso ao iniciar leitura
     _addBookToProgressIfNeeded();
+    _restoreOfflineSession();
+  }
+
+  Future<void> _restoreOfflineSession() async {
+    final id = int.tryParse(widget.bookId);
+    if (id == null) return;
+    if (BookOfflineSession.activeBookId == id) return;
+    final map = await BookOfflineCache.instance.loadUrlMap(id);
+    if (map != null && map.isNotEmpty) {
+      BookOfflineSession.activate(id, map);
+    }
   }
 
   Future<void> _cleanupAudioPlayers() async {
@@ -462,8 +476,8 @@ class _ReaderPageState extends State<ReaderPage> {
           child:
               page.background.isEmpty
                   ? ColoredBox(color: Colors.grey.shade300)
-                  : Image.network(
-                    page.background,
+                  : OfflineBookImage(
+                    url: page.background,
                     fit: BoxFit.cover,
                     errorBuilder: (context, error, stackTrace) {
                       return ColoredBox(color: Colors.grey.shade300);

@@ -34,16 +34,14 @@ dependencies:
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.2
-  provider: ^6.1.0
   get: ^4.6.6
   lottie: ^2.6.0
   just_audio: ^0.9.44
   just_audio_windows: ^0.2.0
   path_provider: ^2.0.11
+  path: ^1.9.0
   flutter_svg: ^2.0.7
-  google_fonts: ^5.0.0
   shared_preferences: ^2.2.0
-  http: ^1.2.0
   # QR code scanner
   mobile_scanner: ^3.5.6
   # Os plugins do Firebase foram removidos para resolver o problema de compilação Windows
@@ -53,7 +51,6 @@ dependencies:
   # Para extrair cores dominantes de imagens
   palette_generator: ^0.3.3
   archive: ^3.4.10
-  logger: ^2.0.2
   # flutter_windowmanager: ^0.2.0  # Removido pois está causando problemas
   image_picker: ^1.0.7
   file_picker: 10.1.0
@@ -62,6 +59,10 @@ dependencies:
   syncfusion_flutter_pdfviewer: ^27.1.48
   epub_view: ^3.2.0
   flutter_tts: ^4.2.0
+  page_flip: ^0.2.5+1
+  cached_network_image: ^3.4.1
+  dio: ^5.9.2
+  flutter_dotenv: ^6.0.1
 
 
 dev_dependencies:

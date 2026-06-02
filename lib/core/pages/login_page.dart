@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:get/get.dart';
 import '../controllers/auth_controller.dart';
 import '../controllers/orientation_controller.dart';
@@ -22,11 +21,7 @@ class _LoginPageState extends State<LoginPage> {
     super.initState();
     // Desbloquear orientações ao entrar na página
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final orientationController = Provider.of<OrientationController>(
-        context,
-        listen: false,
-      );
-      orientationController.unlockOrientation();
+      Get.find<OrientationController>().unlockOrientation();
     });
   }
 

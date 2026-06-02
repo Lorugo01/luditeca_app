@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/layout/app_layout_tokens.dart';
 import '../../../core/navigation/app_shell_navigator.dart';
+import '../../../core/utils/app_messenger.dart';
 import '../../../widgets/app_shell_layout.dart';
+import '../../../widgets/app_subpage_header.dart';
+import '../../reader/services/book_offline_cache.dart';
 
 /// Gestão de conteúdo offline / cache local.
 class SettingsOfflinePage extends StatefulWidget {
@@ -15,21 +17,37 @@ class SettingsOfflinePage extends StatefulWidget {
 }
 
 class _SettingsOfflinePageState extends State<SettingsOfflinePage> {
-  int _localKeys = 0;
+  List<OfflineBookEntry> _books = [];
+  int _totalBytes = 0;
+  int _prefsKeys = 0;
   bool _loading = true;
 
   @override
   void initState() {
     super.initState();
-    _refreshStats();
+    _refresh();
   }
 
-  Future<void> _refreshStats() async {
+  Future<void> _refresh() async {
+    setState(() => _loading = true);
+    final books = await BookOfflineCache.instance.listEntries();
+    final total = await BookOfflineCache.instance.totalBytes();
     final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
     setState(() {
-      _localKeys = prefs.getKeys().length;
+      _books = books;
+      _totalBytes = total;
+      _prefsKeys = prefs.getKeys().length;
       _loading = false;
     });
+  }
+
+  String _formatBytes(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) {
+      return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    }
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
   }
 
   Future<void> _clearReadingCache() async {
@@ -44,12 +62,66 @@ class _SettingsOfflinePageState extends State<SettingsOfflinePage> {
       await prefs.remove(key);
     }
     if (!mounted) return;
-    Get.snackbar(
-      'Cache limpo',
-      'Progresso de leitura local foi apagado.',
-      snackPosition: SnackPosition.BOTTOM,
+    AppMessenger.success('Progresso de leitura local foi apagado.', title: 'Cache limpo');
+    await _refresh();
+  }
+
+  Future<bool?> _confirmDialog({
+    required String title,
+    required String message,
+    required String confirmLabel,
+  }) {
+    return showDialog<bool>(
+      context: context,
+      useRootNavigator: true,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(confirmLabel),
+          ),
+        ],
+      ),
     );
-    await _refreshStats();
+  }
+
+  Future<void> _removeBook(OfflineBookEntry entry) async {
+    final confirm = await _confirmDialog(
+      title: 'Remover do dispositivo?',
+      message:
+          'O livro «${entry.title}» deixará de estar disponível offline '
+          '(${entry.sizeLabel}).',
+      confirmLabel: 'Remover',
+    );
+    if (confirm != true) return;
+    await BookOfflineCache.instance.removeBook(entry.id);
+    if (!mounted) return;
+    AppMessenger.success('Conteúdo offline apagado.', title: 'Removido');
+    await _refresh();
+  }
+
+  Future<void> _clearAllOffline() async {
+    final confirm = await _confirmDialog(
+      title: 'Apagar todos os livros offline?',
+      message:
+          'Serão removidos ${_books.length} livro(s) '
+          '(${_formatBytes(_totalBytes)}). Na próxima leitura voltam a ser transferidos.',
+      confirmLabel: 'Apagar tudo',
+    );
+    if (confirm != true) return;
+    await BookOfflineCache.instance.clearAllBooks();
+    if (!mounted) return;
+    AppMessenger.success(
+      'Todos os livros guardados no dispositivo foram apagados.',
+      title: 'Offline limpo',
+    );
+    await _refresh();
   }
 
   @override
@@ -57,42 +129,70 @@ class _SettingsOfflinePageState extends State<SettingsOfflinePage> {
     return AppShellLayout(
       body: Container(
         color: AppLayoutTokens.scaffoldBackground,
-        child: SafeArea(
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              Row(
-                children: [
-                  _BackChip(onTap: () => Get.back()),
-                  const SizedBox(width: 12),
-                  Text(
-                    '📦 Conteúdo Offline',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                      color: AppLayoutTokens.primary,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
+        child: ListView(
+          padding: EdgeInsets.fromLTRB(
+            16,
+            0,
+            16,
+            AppShellLayout.scrollBottomPadding(context),
+          ),
+          children: [
+            AppSubpageHeader(
+              title: '📦 Conteúdo Offline',
+              onBack: () => appSubpageBack(),
+            ),
+            const SizedBox(height: 20),
               if (_loading)
                 const Center(child: CircularProgressIndicator())
               else ...[
                 _InfoCard(
-                  title: 'Estado',
+                  title: 'Livros no dispositivo',
                   body:
-                      'Os livros são lidos online pela API. '
-                      'Esta área gere dados guardados no dispositivo '
-                      '($_localKeys chaves no armazenamento local).',
+                      '${_books.length} livro(s) guardado(s) para leitura sem voltar a transferir imagens. '
+                      'Espaço usado: ${_formatBytes(_totalBytes)}.',
                 ),
                 const SizedBox(height: 12),
                 _InfoCard(
-                  title: 'Favoritos',
+                  title: 'Outros dados locais',
                   body:
-                      'Os favoritos sincronizam com a sua conta quando há ligação à internet.',
+                      'Progresso de aventuras e preferências: $_prefsKeys chaves no armazenamento.',
                 ),
+                if (_books.isEmpty) ...[
+                  const SizedBox(height: 16),
+                  Text(
+                    'Abra um livro na biblioteca para o guardar aqui automaticamente na primeira leitura.',
+                    style: TextStyle(
+                      fontSize: 13,
+                      height: 1.4,
+                      color: AppLayoutTokens.textPrimary.withAlpha(179),
+                    ),
+                  ),
+                ] else ...[
+                  const SizedBox(height: 16),
+                  ..._books.map(
+                    (b) => Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: _OfflineBookTile(
+                        entry: b,
+                        onRemove: () => _removeBook(b),
+                      ),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 20),
+                FilledButton.icon(
+                  onPressed: _books.isEmpty ? null : _clearAllOffline,
+                  icon: const Icon(Icons.folder_delete_outlined),
+                  label: const Text('Apagar todos os livros offline'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppLayoutTokens.primary,
+                    minimumSize: const Size.fromHeight(48),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
                 FilledButton.icon(
                   onPressed: _clearReadingCache,
                   icon: const Icon(Icons.delete_outline),
@@ -121,29 +221,68 @@ class _SettingsOfflinePageState extends State<SettingsOfflinePage> {
             ],
           ),
         ),
-      ),
     );
   }
 }
 
-class _BackChip extends StatelessWidget {
-  const _BackChip({required this.onTap});
+class _OfflineBookTile extends StatelessWidget {
+  const _OfflineBookTile({
+    required this.entry,
+    required this.onRemove,
+  });
 
-  final VoidCallback onTap;
+  final OfflineBookEntry entry;
+  final VoidCallback onRemove;
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: AppLayoutTokens.cardBackground,
-      shape: const CircleBorder(),
-      child: InkWell(
-        customBorder: const CircleBorder(),
-        onTap: onTap,
-        child: SizedBox(
-          width: 44,
-          height: 44,
-          child: Icon(Icons.arrow_back, color: AppLayoutTokens.textPrimary),
-        ),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppLayoutTokens.cardBackground,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: AppLayoutTokens.primary.withAlpha(24),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.offline_pin, color: AppLayoutTokens.primary),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  entry.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: AppLayoutTokens.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${entry.sizeLabel} · ${entry.imageCount} imagem(ns) · ${entry.kind}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppLayoutTokens.textPrimary.withAlpha(160),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            onPressed: onRemove,
+            icon: const Icon(Icons.delete_outline),
+            tooltip: 'Remover offline',
+          ),
+        ],
       ),
     );
   }

@@ -4,12 +4,9 @@ import 'package:get/get.dart';
 import '../../../core/controllers/auth_controller.dart';
 import '../../../core/models/book_model.dart';
 import '../../../core/services/luditeca_api_service.dart';
-import '../pages/animated_book_reader_page.dart';
-import '../pages/digital_book_reader_page.dart';
-import '../pages/interactive_book_reader_page.dart';
+import '../pages/book_reading_prepare_page.dart';
 import '../pages/reader_page.dart';
 import '../pages/reader_webview_page.dart';
-import 'book_pages_loader.dart';
 import '../../home/controllers/home_controller.dart';
 
 /// Posição guardada no perfil (`progress[bookId] = { page, step }`).
@@ -93,7 +90,7 @@ class ReadingProgressHelper {
   }
 }
 
-/// Abre o leitor correcto com progresso restaurado.
+/// Abre o leitor: primeiro prepara (páginas + download de imagens), depois o leitor.
 Future<void> openBookForReading(
   Map<String, dynamic> book, {
   ReadingPosition? position,
@@ -102,8 +99,6 @@ Future<void> openBookForReading(
   final saved = position ??
       await ReadingProgressHelper.getPosition(model.id) ??
       const ReadingPosition();
-  final savedPage = saved.page;
-  final savedStep = saved.step;
 
   const transition = Transition.fadeIn;
   const duration = Duration(milliseconds: 500);
@@ -116,83 +111,47 @@ Future<void> openBookForReading(
       duration: duration,
       curve: curve,
     );
-    // Actualiza a home só se ainda estiver visível (evita trabalho em background).
-    if (Get.isRegistered<HomeController>() &&
-        Get.currentRoute == '/home') {
+    if (Get.isRegistered<HomeController>() && Get.currentRoute == '/home') {
       Get.find<HomeController>().refreshData();
     }
   }
 
-  switch (model.kind) {
-    case BookKind.animated:
-      final loaded = await loadBookForReading(model);
-      if (loaded == null) {
-        Get.snackbar(
-          'Erro',
-          'Não foi possível carregar o livro.',
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: Get.theme.colorScheme.error,
-          colorText: Get.theme.colorScheme.onError,
-        );
-        return;
-      }
-      await go(AnimatedBookReaderPage(
-        book: loaded,
-        initialSlotIndex: savedPage,
-      ));
-      return;
-
-    case BookKind.interactive:
-      final loaded = await loadBookForReading(model);
-      if (loaded == null) {
-        Get.snackbar(
-          'Erro',
-          'Não foi possível carregar as cenas.',
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: Get.theme.colorScheme.error,
-          colorText: Get.theme.colorScheme.onError,
-        );
-        return;
-      }
-      await go(InteractiveBookReaderPage(
-        book: loaded,
-        initialSceneIndex: savedPage,
-      ));
-      return;
-
-    case BookKind.digital:
-      final loaded = await loadBookForReading(model);
-      if (loaded == null) {
-        Get.snackbar(
-          'Erro',
-          'Não foi possível carregar o livro digital.',
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: Get.theme.colorScheme.error,
-          colorText: Get.theme.colorScheme.onError,
-        );
-        return;
-      }
-      await go(DigitalBookReaderPage(
-        book: loaded,
-        initialPdfPage: savedPage > 0 ? savedPage : 1,
-      ));
-      return;
-
-    case BookKind.legacy:
-      break;
+  Future<void> goWithPrepare() async {
+    await go(
+      BookReadingPreparePage(
+        book: model,
+        savedPage: saved.page,
+        savedStep: saved.step,
+      ),
+    );
   }
 
   final slidebookUrl = model.slidebookLink;
   if (slidebookUrl != null &&
       slidebookUrl.isNotEmpty &&
-      !model.hasNativePages) {
+      !model.hasNativePages &&
+      model.kind == BookKind.legacy) {
     await go(ReaderWebViewPage(slidebookUrl: slidebookUrl));
     return;
   }
 
+  switch (model.kind) {
+    case BookKind.animated:
+    case BookKind.interactive:
+    case BookKind.digital:
+      await goWithPrepare();
+      return;
+    case BookKind.legacy:
+      if (model.hasNativePages) {
+        await goWithPrepare();
+        return;
+      }
+      break;
+  }
+
   await go(ReaderPage(
     bookId: model.id.toString(),
-    initialPage: savedPage,
-    initialStep: savedStep,
+    initialPage: saved.page,
+    initialStep: saved.step,
   ));
 }

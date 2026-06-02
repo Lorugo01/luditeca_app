@@ -14,17 +14,22 @@ import '../models/story_page.dart';
 import '../utils/book_pages_loader.dart';
 import '../utils/reading_progress_helper.dart';
 import '../services/reading_xp_service.dart';
+import '../services/book_offline_cache.dart';
+import '../services/book_offline_session.dart';
+import '../widgets/offline_book_image.dart';
 
 /// Leitor interactivo estilo «Escolha sua aventura» (paridade com
 /// `InteractiveStoryReader.jsx` do Play).
 class InteractiveBookReaderPage extends StatefulWidget {
   final BookModel book;
   final int initialSceneIndex;
+  final bool skipInitialLoad;
 
   const InteractiveBookReaderPage({
     super.key,
     required this.book,
     this.initialSceneIndex = 0,
+    this.skipInitialLoad = false,
   });
 
   @override
@@ -46,6 +51,25 @@ class _InteractiveBookReaderPageState extends State<InteractiveBookReaderPage> {
   bool _sceneRestored = false;
   int? _animatingChoice;
   Worker? _xpSceneWorker;
+  bool _sceneAnimating = false;
+
+  /// 1 = avançar, -1 = voltar, 0 = neutro.
+  int _transitionDirection = 0;
+  bool _completionCheckScheduled = false;
+
+  static const double _contentMaxWidth = 720;
+  static const Duration _sceneAnimDuration = Duration(milliseconds: 720);
+  static const Duration _choiceAnimDuration = Duration(milliseconds: 420);
+
+  bool _isCompactLayout(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    return size.height < 700 || size.width < 400;
+  }
+
+  double _bodyFontSize(BuildContext context) =>
+      _isCompactLayout(context) ? 15.0 : 17.0;
+
+  bool get _choicesLocked => _animatingChoice != null || _sceneAnimating;
 
   @override
   void initState() {
@@ -53,7 +77,16 @@ class _InteractiveBookReaderPageState extends State<InteractiveBookReaderPage> {
     _authController = Get.find<AuthController>();
     _apiService = LuditecaApiService();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    _restoreOfflineSession();
     _loadContent();
+  }
+
+  Future<void> _restoreOfflineSession() async {
+    if (BookOfflineSession.activeBookId == widget.book.id) return;
+    final map = await BookOfflineCache.instance.loadUrlMap(widget.book.id);
+    if (map != null && map.isNotEmpty) {
+      BookOfflineSession.activate(widget.book.id, map);
+    }
   }
 
   @override
@@ -67,6 +100,9 @@ class _InteractiveBookReaderPageState extends State<InteractiveBookReaderPage> {
     )) {
       Get.delete<InteractiveBookReaderController>(tag: 'interactive-$id');
     }
+    if (BookOfflineSession.activeBookId == widget.book.id) {
+      BookOfflineSession.clear();
+    }
     super.dispose();
   }
 
@@ -79,7 +115,12 @@ class _InteractiveBookReaderPageState extends State<InteractiveBookReaderPage> {
     });
 
     try {
-      final loaded = await loadBookForReading(widget.book);
+      final BookModel? loaded;
+      if (widget.skipInitialLoad && widget.book.pages.isNotEmpty) {
+        loaded = widget.book;
+      } else {
+        loaded = await loadBookForReading(widget.book);
+      }
       if (!mounted) return;
 
       if (loaded == null) {
@@ -115,6 +156,9 @@ class _InteractiveBookReaderPageState extends State<InteractiveBookReaderPage> {
         tag: tag,
       );
 
+      while (mounted && (_controller?.isLoading ?? true)) {
+        await Future<void>.delayed(const Duration(milliseconds: 16));
+      }
       setState(() => _loading = false);
       _bindReadingXp(loaded.id);
     } catch (e) {
@@ -149,6 +193,10 @@ class _InteractiveBookReaderPageState extends State<InteractiveBookReaderPage> {
     final idx = widget.initialSceneIndex;
     if (idx <= 0 || idx >= controller.story.length) return;
     controller.jumpToPage(controller.story[idx].id);
+  }
+
+  void _refreshUi() {
+    if (mounted) setState(() {});
   }
 
   int _currentSceneIndex(InteractiveBookReaderController controller) {
@@ -211,15 +259,52 @@ class _InteractiveBookReaderPageState extends State<InteractiveBookReaderPage> {
     return 'Cena ${page.id}';
   }
 
-  void _pickChoice(Choice choice, int index) {
-    if (_animatingChoice != null) return;
+  Future<void> _pickChoice(Choice choice, int index) async {
+    final controller = _controller;
+    if (controller == null || _animatingChoice != null) return;
+
     setState(() => _animatingChoice = index);
-    Future.delayed(const Duration(milliseconds: 380), () {
-      if (!mounted) return;
-      _controller?.pickChoice(choice);
-      setState(() => _animatingChoice = null);
-      _persistProgress();
+    await Future.delayed(_choiceAnimDuration);
+    if (!mounted) return;
+
+    _transitionDirection = 1;
+    controller.pickChoice(choice);
+    setState(() {
+      _animatingChoice = null;
+      _sceneAnimating = true;
     });
+    unawaited(_persistProgress());
+    await Future.delayed(_sceneAnimDuration);
+    if (mounted) setState(() => _sceneAnimating = false);
+  }
+
+  void _goBackOneScene(InteractiveBookReaderController controller) {
+    if ((controller.state?.history.length ?? 0) < 2 || _sceneAnimating) return;
+    _transitionDirection = -1;
+    _completionCheckScheduled = false;
+    controller.goToPreviousPage();
+    setState(() => _sceneAnimating = true);
+    _refreshUi();
+    unawaited(Future<void>.delayed(_sceneAnimDuration).then((_) {
+      if (mounted) setState(() => _sceneAnimating = false);
+    }));
+  }
+
+  void _jumpToScene(
+    InteractiveBookReaderController controller,
+    StoryPage target,
+    int targetStoryIndex,
+  ) {
+    final current = controller.currentPage;
+    final currentIdx = current == null
+        ? 0
+        : controller.story.indexWhere((p) => p.id == current.id);
+    _transitionDirection = targetStoryIndex >= currentIdx ? 1 : -1;
+    if (target.isEnding) {
+      _completionCheckScheduled = false;
+    }
+    controller.jumpToPage(target.id);
+    _refreshUi();
   }
 
   void _showStoryMap(InteractiveBookReaderController controller) {
@@ -381,9 +466,8 @@ class _InteractiveBookReaderPageState extends State<InteractiveBookReaderPage> {
                         child: InkWell(
                           borderRadius: BorderRadius.circular(16),
                           onTap: () {
-                            controller.jumpToPage(pg.id);
+                            _jumpToScene(controller, pg, i);
                             Navigator.pop(ctx);
-                            setState(() {});
                           },
                           child: Padding(
                             padding: const EdgeInsets.symmetric(
@@ -479,134 +563,204 @@ class _InteractiveBookReaderPageState extends State<InteractiveBookReaderPage> {
       return _buildErrorState('Aventura indisponível.');
     }
 
-    return Obx(() {
-      if (controller.isLoading) {
-        return const Center(child: CircularProgressIndicator());
-      }
-      _maybeRestoreScene(controller);
-      final page = controller.currentPage;
-      if (page == null) {
-        return _buildErrorState(
-          'Não foi possível localizar a página actual. '
-          'Toque em Recomeçar ou volte e abra o livro de novo.',
-        );
-      }
+    if (controller.isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
 
-      if (page.isEnding) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _registerCompletionIfNeeded();
-        });
-      }
+    _maybeRestoreScene(controller);
 
-      final choices = controller.availableChoices;
-      final topInset = MediaQuery.paddingOf(context).top;
+    final page = controller.currentPage;
+    if (page == null) {
+      return _buildErrorState(
+        'Não foi possível localizar a página actual. '
+        'Toque em Recomeçar ou volte e abra o livro de novo.',
+      );
+    }
 
-      return Column(
+    if (page.isEnding && !_completionCheckScheduled) {
+      _completionCheckScheduled = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _registerCompletionIfNeeded();
+      });
+    }
+
+    final topInset = MediaQuery.paddingOf(context).top;
+
+    return ColoredBox(
+      color: _bg,
+      child: Column(
         children: [
           _buildTopBar(controller, page, topInset),
           Expanded(
+            child: _buildSceneBody(controller, page),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _pageTurnTransition(Widget child, Animation<double> animation) {
+    final curved = CurvedAnimation(
+      parent: animation,
+      curve: Curves.easeInOutCubic,
+      reverseCurve: Curves.easeInOutCubic,
+    );
+    final horizontal = _transitionDirection >= 0 ? 1.0 : -1.0;
+    return SlideTransition(
+      position: Tween<Offset>(
+        begin: Offset(horizontal, 0),
+        end: Offset.zero,
+      ).animate(curved),
+      child: FadeTransition(
+        opacity: Tween<double>(begin: 0.72, end: 1).animate(
+          CurvedAnimation(
+            parent: animation,
+            curve: const Interval(0.15, 1, curve: Curves.easeOut),
+          ),
+        ),
+        child: child,
+      ),
+    );
+  }
+
+  Widget _buildSceneBody(
+    InteractiveBookReaderController controller,
+    StoryPage page,
+  ) {
+    final canSwipeBack = (controller.state?.history.length ?? 0) > 1 && !page.isEnding;
+
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: _contentMaxWidth),
+        child: AnimatedSwitcher(
+          duration: _sceneAnimDuration,
+          switchInCurve: Curves.easeInOutCubic,
+          switchOutCurve: Curves.easeInOutCubic,
+          transitionBuilder: _pageTurnTransition,
+          layoutBuilder: (current, previous) => Stack(
+            fit: StackFit.expand,
+            clipBehavior: Clip.hardEdge,
+            children: [
+              ...previous,
+              if (current != null) current,
+            ],
+          ),
+          child: KeyedSubtree(
+            key: ValueKey('scene-${page.id}'),
             child: Column(
               children: [
                 Expanded(
                   flex: 45,
-                  child: _buildSceneImage(page),
+                  child: GestureDetector(
+                    onHorizontalDragEnd: canSwipeBack
+                        ? (details) {
+                            if ((details.primaryVelocity ?? 0) > 280) {
+                              _goBackOneScene(controller);
+                            }
+                          }
+                        : null,
+                    child: _buildSceneImage(page),
+                  ),
                 ),
                 Expanded(
                   flex: 55,
                   child: SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 300),
-                      child: KeyedSubtree(
-                        key: ValueKey(page.id),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Align(
-                              alignment: Alignment.centerLeft,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 5,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: page.isStart
-                                      ? AppLayoutTokens.primary
-                                      : page.isEnding
-                                          ? const Color(0xFF48BB78)
-                                          : AppLayoutTokens.primary
-                                              .withAlpha(180),
-                                  borderRadius: BorderRadius.circular(99),
-                                ),
-                                child: Text(
-                                  _sceneBadge(page),
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            if (page.text != null &&
-                                page.text!.trim().isNotEmpty) ...[
-                              const SizedBox(height: 12),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 14,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withAlpha(31),
-                                  borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(
-                                    color: Colors.white.withAlpha(40),
-                                  ),
-                                ),
-                                child: Text(
-                                  page.text!,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 17,
-                                    fontWeight: FontWeight.w700,
-                                    height: 1.45,
-                                  ),
-                                ),
-                              ),
-                            ],
-                            if (page.isEnding)
-                              _buildEndingBlock(page, controller)
-                            else if (choices.isNotEmpty) ...[
-                              const SizedBox(height: 16),
-                              Text(
-                                '🤔 O que você quer fazer?',
-                                style: TextStyle(
-                                  color: Colors.white.withAlpha(179),
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                              const SizedBox(height: 10),
-                              ...choices.asMap().entries.map((entry) {
-                                return _buildChoiceButton(
-                                  entry.value,
-                                  entry.key,
-                                );
-                              }),
-                            ] else
-                              _buildNoChoices(controller),
-                          ],
-                        ),
-                      ),
-                    ),
+                    padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
+                    child: _buildSceneScrollContent(controller, page),
                   ),
                 ),
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSceneScrollContent(
+    InteractiveBookReaderController controller,
+    StoryPage page,
+  ) {
+    final choices = controller.availableChoices;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildSceneTextBlock(page),
+        if (page.isEnding)
+          _buildEndingBlock(page, controller)
+        else if (choices.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          Text(
+            '🤔 O que você quer fazer?',
+            style: TextStyle(
+              color: Colors.white.withAlpha(179),
+              fontSize: _isCompactLayout(context) ? 14 : 15,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 10),
+          ...choices.asMap().entries.map((entry) {
+            return _buildChoiceButton(entry.value, entry.key);
+          }),
+        ] else
+          _buildNoChoices(controller),
+      ],
+    );
+  }
+
+  Widget _buildSceneTextBlock(StoryPage page) {
+    final fontSize = _bodyFontSize(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: page.isStart
+                  ? AppLayoutTokens.primary
+                  : page.isEnding
+                      ? const Color(0xFF48BB78)
+                      : AppLayoutTokens.primary.withAlpha(180),
+              borderRadius: BorderRadius.circular(99),
+            ),
+            child: Text(
+              _sceneBadge(page),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ),
+        if (page.text != null && page.text!.trim().isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: _isCompactLayout(context) ? 12 : 16,
+              vertical: _isCompactLayout(context) ? 10 : 14,
+            ),
+            decoration: BoxDecoration(
+              color: Colors.white.withAlpha(31),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.white.withAlpha(40)),
+            ),
+            child: Text(
+              page.text!,
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: fontSize,
+                fontWeight: FontWeight.w700,
+                height: 1.4,
+              ),
+            ),
+          ),
         ],
-      );
-    });
+      ],
+    );
   }
 
   Widget _buildTopBar(
@@ -655,7 +809,7 @@ class _InteractiveBookReaderPageState extends State<InteractiveBookReaderPage> {
           if (canGoBack)
             _topIconButton(
               Icons.rotate_left,
-              controller.goToPreviousPage,
+              () => _goBackOneScene(controller),
             ),
         ],
       ),
@@ -679,19 +833,17 @@ class _InteractiveBookReaderPageState extends State<InteractiveBookReaderPage> {
   }
 
   Widget _buildSceneImage(StoryPage page) {
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 350),
-      child: page.imageUrl != null && page.imageUrl!.isNotEmpty
-          ? Image.network(
-              page.imageUrl!,
-              key: ValueKey(page.imageUrl),
-              fit: BoxFit.contain,
-              width: double.infinity,
-              height: double.infinity,
-              errorBuilder: (_, __, ___) => _imagePlaceholder(),
-            )
-          : _imagePlaceholder(key: ValueKey('ph-${page.id}')),
-    );
+    if (page.imageUrl != null && page.imageUrl!.isNotEmpty) {
+      return OfflineBookImage(
+        key: ValueKey(page.imageUrl),
+        url: page.imageUrl!,
+        fit: BoxFit.contain,
+        width: double.infinity,
+        height: double.infinity,
+        errorBuilder: (_, __, ___) => _imagePlaceholder(),
+      );
+    }
+    return _imagePlaceholder(key: ValueKey('ph-${page.id}'));
   }
 
   Widget _imagePlaceholder({Key? key}) {
@@ -717,8 +869,11 @@ class _InteractiveBookReaderPageState extends State<InteractiveBookReaderPage> {
     final isChosen = _animatingChoice == index;
     final letter = String.fromCharCode(65 + index);
 
+    final compact = _isCompactLayout(context);
+    final labelSize = compact ? 15.0 : 17.0;
+
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: EdgeInsets.only(bottom: compact ? 8 : 10),
       child: Material(
         color: isChosen
             ? AppLayoutTokens.primary
@@ -726,9 +881,12 @@ class _InteractiveBookReaderPageState extends State<InteractiveBookReaderPage> {
         borderRadius: BorderRadius.circular(20),
         child: InkWell(
           borderRadius: BorderRadius.circular(20),
-          onTap: () => _pickChoice(choice, index),
+          onTap: _choicesLocked ? null : () => _pickChoice(choice, index),
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            padding: EdgeInsets.symmetric(
+              horizontal: compact ? 12 : 16,
+              vertical: compact ? 11 : 14,
+            ),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
@@ -761,9 +919,9 @@ class _InteractiveBookReaderPageState extends State<InteractiveBookReaderPage> {
                 Expanded(
                   child: Text(
                     choice.label.isEmpty ? 'Continuar' : choice.label,
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: Colors.white,
-                      fontSize: 17,
+                      fontSize: labelSize,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -801,7 +959,7 @@ class _InteractiveBookReaderPageState extends State<InteractiveBookReaderPage> {
         if (canGoBack) ...[
           const SizedBox(height: 12),
           OutlinedButton(
-            onPressed: controller.goToPreviousPage,
+            onPressed: () => _goBackOneScene(controller),
             style: OutlinedButton.styleFrom(
               foregroundColor: Colors.white,
               side: BorderSide(color: Colors.white.withAlpha(64)),
@@ -823,36 +981,48 @@ class _InteractiveBookReaderPageState extends State<InteractiveBookReaderPage> {
   ) {
     final canTryAnother = (controller.state?.history.length ?? 0) > 1;
 
+    final compact = _isCompactLayout(context);
+    final titleSize = compact ? 18.0 : 22.0;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const SizedBox(height: 12),
-        const Text('🎉', textAlign: TextAlign.center, style: TextStyle(fontSize: 48)),
         const SizedBox(height: 8),
         Text(
-          endingLabel(page.endingType),
+          '🎉',
           textAlign: TextAlign.center,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 22,
-            fontWeight: FontWeight.w800,
-          ),
+          style: TextStyle(fontSize: compact ? 36 : 48),
         ),
         const SizedBox(height: 6),
         Text(
+          endingLabel(page.endingType),
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: titleSize,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
           'Você encontrou um dos finais possíveis.',
           textAlign: TextAlign.center,
-          style: TextStyle(color: Colors.white.withAlpha(153), fontSize: 15),
+          style: TextStyle(
+            color: Colors.white.withAlpha(153),
+            fontSize: compact ? 13 : 15,
+          ),
         ),
-        const SizedBox(height: 20),
+        SizedBox(height: compact ? 14 : 20),
         _buildEndingActionButton(
           label: 'Recomeçar do início',
           icon: Icons.replay_rounded,
           variant: _EndingActionVariant.primary,
           onTap: () async {
+            _transitionDirection = 0;
             await controller.restart();
             _completionRegistered = false;
-            setState(() {});
+            _completionCheckScheduled = false;
+            _refreshUi();
           },
         ),
         if (canTryAnother) ...[
@@ -861,7 +1031,7 @@ class _InteractiveBookReaderPageState extends State<InteractiveBookReaderPage> {
             label: 'Tentar outro caminho',
             icon: Icons.arrow_back_rounded,
             variant: _EndingActionVariant.secondary,
-            onTap: controller.goToPreviousPage,
+            onTap: () => _goBackOneScene(controller),
           ),
         ],
         const SizedBox(height: 12),
@@ -933,9 +1103,14 @@ class _InteractiveBookReaderPageState extends State<InteractiveBookReaderPage> {
                     : null,
           ),
           child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 52),
+            constraints: BoxConstraints(
+              minHeight: _isCompactLayout(context) ? 46 : 52,
+            ),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              padding: EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: _isCompactLayout(context) ? 11 : 14,
+              ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -947,7 +1122,7 @@ class _InteractiveBookReaderPageState extends State<InteractiveBookReaderPage> {
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: textColor,
-                        fontSize: 17,
+                        fontSize: _isCompactLayout(context) ? 15 : 17,
                         fontWeight: isPrimary ? FontWeight.w800 : FontWeight.w700,
                       ),
                     ),

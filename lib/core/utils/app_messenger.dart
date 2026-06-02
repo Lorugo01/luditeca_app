@@ -29,12 +29,15 @@ abstract final class AppMessenger {
       duration: const Duration(seconds: 3),
     );
 
+  /// Preferir o navigator principal; [Get.overlayContext] pode apontar para
+  /// um overlay inválido quando há mais de um [GetMaterialApp] no arranque.
     for (final ctx in <BuildContext?>[
-      Get.overlayContext,
-      Get.context,
       Get.key.currentContext,
+      Get.context,
+      Get.overlayContext,
     ]) {
       if (ctx == null) continue;
+      if (Overlay.maybeOf(ctx) == null) continue;
       final messenger = ScaffoldMessenger.maybeOf(ctx);
       if (messenger != null) {
         messenger.showSnackBar(snackBar);

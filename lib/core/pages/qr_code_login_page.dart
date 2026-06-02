@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:get/get.dart';
 import '../controllers/auth_controller.dart';
 
 class QRCodeLoginPage extends StatefulWidget {
@@ -20,10 +20,7 @@ class _QRCodeLoginPageState extends State<QRCodeLoginPage> {
 
     try {
       // Usar o método do AuthController para login com QR code
-      final authController = Provider.of<AuthController>(
-        context,
-        listen: false,
-      );
+      final authController = Get.find<AuthController>();
       final success = await authController.signInWithQRCode(qrCodeData);
 
       if (success && mounted) {
@@ -48,8 +45,8 @@ class _QRCodeLoginPageState extends State<QRCodeLoginPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Login com QR Code'), elevation: 0),
-      body: Consumer<AuthController>(
-        builder: (context, authController, _) {
+      body: Obx(() {
+          final authController = Get.find<AuthController>();
           return Center(
             child: Padding(
               padding: const EdgeInsets.all(24.0),
@@ -132,8 +129,7 @@ class _QRCodeLoginPageState extends State<QRCodeLoginPage> {
               ),
             ),
           );
-        },
-      ),
+        }),
     );
   }
 }

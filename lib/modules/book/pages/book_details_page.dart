@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -363,10 +364,10 @@ class _CoverSection extends StatelessWidget {
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(14),
                 child: imageUrl.isNotEmpty
-                    ? Image.network(
-                        imageUrl,
+                    ? CachedNetworkImage(
+                        imageUrl: imageUrl,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => placeholder,
+                        errorWidget: (_, __, ___) => placeholder,
                       )
                     : placeholder,
               ),

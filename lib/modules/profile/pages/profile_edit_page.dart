@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import '../../../core/layout/app_layout_tokens.dart';
 import '../../../core/utils/app_messenger.dart';
 import '../../../widgets/app_shell_layout.dart';
+import '../../../widgets/app_subpage_header.dart';
 import '../controllers/profile_controller.dart';
 import '../data/profile_age_band.dart';
 import '../data/profile_avatars.dart';
@@ -146,34 +147,25 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
     return AppShellLayout(
       body: Container(
         color: AppLayoutTokens.scaffoldBackground,
-        child: SafeArea(
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 8, 16, 8),
-                child: Row(
-                  children: [
-                    _roundButton(
-                      icon: Icons.arrow_back,
-                      onTap: () => Navigator.of(context).pop(),
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      '✏️ Editar Perfil',
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                        color: AppLayoutTokens.primary,
-                      ),
-                    ),
-                  ],
-                ),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: AppSubpageHeader(
+                title: '✏️ Editar Perfil',
+                onBack: () => appSubpageBack(fallbackRoute: '/profile'),
               ),
-              Expanded(
-                child: AbsorbPointer(
-                  absorbing: _saving || _uploadingPhoto,
-                  child: ListView(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
+            ),
+            Expanded(
+              child: AbsorbPointer(
+                absorbing: _saving || _uploadingPhoto,
+                child: ListView(
+                  padding: EdgeInsets.fromLTRB(
+                    16,
+                    8,
+                    16,
+                    AppShellLayout.scrollBottomPadding(context),
+                  ),
                     children: [
                       _sectionCard(
                         child: Column(
@@ -329,7 +321,6 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
             ],
           ),
         ),
-      ),
     );
   }
 
@@ -386,22 +377,6 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
         borderSide: BorderSide(color: AppLayoutTokens.primary, width: 2),
       ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-    );
-  }
-
-  Widget _roundButton({required IconData icon, required VoidCallback onTap}) {
-    return Material(
-      color: AppLayoutTokens.cardBackground,
-      shape: const CircleBorder(),
-      child: InkWell(
-        customBorder: const CircleBorder(),
-        onTap: onTap,
-        child: SizedBox(
-          width: 44,
-          height: 44,
-          child: Icon(icon, color: AppLayoutTokens.textPrimary),
-        ),
-      ),
     );
   }
 }

@@ -1,9 +1,17 @@
 import '../../../core/models/book_model.dart';
 import '../../../core/services/luditeca_api_service.dart';
+import '../services/book_offline_cache.dart';
 
 /// Carrega o livro completo para leitura.
 /// A listagem `GET /books` não inclui `pages`, `pdf_url` nem `epub_url`.
+/// Usa cache offline no dispositivo quando disponível.
 Future<BookModel?> loadBookForReading(BookModel book) async {
+  final offline = await BookOfflineCache.instance.tryLoadBook(book.id);
+  if (offline != null &&
+      (offline.pages.isNotEmpty || offline.hasDigitalAsset)) {
+    return offline;
+  }
+
   final needsPages = book.pages.isEmpty;
   final needsDigital = !book.hasDigitalAsset &&
       (book.kind == BookKind.digital || book.isPdf);

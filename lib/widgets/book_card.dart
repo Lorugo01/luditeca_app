@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../modules/book/pages/book_details_page.dart';
@@ -108,32 +109,14 @@ class _BookCardState extends State<BookCard> {
                     ),
                     child:
                         imageUrl.isNotEmpty
-                            ? Image.network(
-                              imageUrl,
+                            ? CachedNetworkImage(
+                              imageUrl: imageUrl,
                               width: double.infinity,
                               fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) {
-                                return _buildPlaceholder();
-                              },
-                              loadingBuilder: (
-                                context,
-                                child,
-                                loadingProgress,
-                              ) {
-                                if (loadingProgress == null) return child;
-                                return Center(
-                                  child: CircularProgressIndicator(
-                                    value:
-                                        loadingProgress.expectedTotalBytes !=
-                                                null
-                                            ? loadingProgress
-                                                    .cumulativeBytesLoaded /
-                                                loadingProgress
-                                                    .expectedTotalBytes!
-                                            : null,
-                                  ),
-                                );
-                              },
+                              errorWidget: (_, __, ___) => _buildPlaceholder(),
+                              placeholder: (_, __) => const Center(
+                                child: CircularProgressIndicator(),
+                              ),
                             )
                             : _buildPlaceholder(),
                   ),

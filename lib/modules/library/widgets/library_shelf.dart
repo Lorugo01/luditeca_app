@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/layout/app_layout_tokens.dart';
 import '../../../core/models/book_model.dart';
+import 'cover_layout.dart';
 import 'library_layout.dart';
 import 'shelf_book_cover.dart';
 
@@ -20,9 +21,7 @@ class LibraryShelf extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final contentWidth = MediaQuery.sizeOf(context).width;
-    final coverSize = LibraryLayout.shelfCoverSize(contentWidth);
-    final rowHeight = LibraryLayout.shelfRowHeight(coverSize);
-    final labelWidth = LibraryLayout.titleWidthForCover(coverSize);
+    final rowHeight = CoverLayout.shelfRowHeight(contentWidth);
     final compact = LibraryLayout.isCompact(context);
 
     return Padding(
@@ -38,7 +37,13 @@ class LibraryShelf extends StatelessWidget {
               itemBuilder: (context, i) {
                 final book = books[i];
                 final globalIndex = startIndex + i;
-                final tilt = (i - (books.length - 1) / 2) * (compact ? 0.03 : 0.04);
+                final aspect = 0.71; // rótulo antes da capa carregar
+                final labelWidth = CoverLayout.labelWidthFor(
+                  CoverLayout.shelfSize(
+                    aspectRatio: aspect,
+                    contentWidth: contentWidth,
+                  ),
+                );
 
                 return Padding(
                   padding: EdgeInsets.only(left: i == 0 ? 0 : 2, right: compact ? 2 : 4),
@@ -48,8 +53,10 @@ class LibraryShelf extends StatelessWidget {
                       ShelfBookCover(
                         book: book,
                         spineColor: ShelfBookCover.spineColorAt(globalIndex),
-                        tiltRadians: tilt,
-                        coverSize: coverSize,
+                        contentWidth: contentWidth,
+                        index: i,
+                        count: books.length,
+                        compact: compact,
                         onTap: () => onBookTap(book),
                       ),
                       const SizedBox(height: 6),

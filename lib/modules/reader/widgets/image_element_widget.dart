@@ -4,6 +4,7 @@ import 'package:just_audio/just_audio.dart';
 import '../models/book_element.dart';
 import 'audio_badge_layout.dart';
 import 'audio_button_widget.dart';
+import 'offline_book_image.dart';
 
 class ImageElementWidget extends StatelessWidget {
   final BookElement element;
@@ -23,8 +24,8 @@ class ImageElementWidget extends StatelessWidget {
       decoration: BoxDecoration(borderRadius: BorderRadius.circular(8)),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(8),
-        child: Image.network(
-          element.content ?? '',
+        child: OfflineBookImage(
+          url: element.content ?? '',
           fit: BoxFit.cover,
           errorBuilder: (context, error, stackTrace) {
             return Container(
