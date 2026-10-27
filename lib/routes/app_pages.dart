@@ -2,7 +2,6 @@ import 'package:get/get.dart';
 import '../core/controllers/orientation_controller.dart';
 import '../core/navigation/app_shell_route_scope.dart';
 import '../core/preferences/app_preferences_controller.dart';
-import '../modules/activities/pages/activities_placeholder_page.dart';
 import '../modules/favorites/pages/favorites_page.dart';
 import '../modules/favorites/controllers/favorites_controller.dart';
 import '../modules/profile/pages/achievements_page.dart';
@@ -60,7 +59,6 @@ class AppPages {
         }
       }),
     ),
-    GetPage(name: '/activities', page: () => const ActivitiesPlaceholderPage()),
     GetPage(name: '/settings', page: () => const SettingsPage()),
     GetPage(name: '/settings/themes', page: () => const ThemePickerPage()),
     GetPage(name: '/settings/offline', page: () => const SettingsOfflinePage()),

@@ -31,7 +31,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      homeController.refreshData();
       final profile = Get.find<ProfileController>();
       if (!profile.isLoading.value && profile.userName.value.isEmpty) {
         profile.loadUserProfile();
@@ -48,7 +47,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      homeController.refreshData();
+      homeController.reloadOnReturn();
     }
     super.didChangeAppLifecycleState(state);
   }
@@ -277,6 +276,7 @@ class _Avatar extends StatelessWidget {
           imageUrl: url,
           width: 64,
           height: 64,
+          memCacheWidth: 192,
           fit: BoxFit.cover,
           errorWidget: (_, __, ___) => _fallback(),
         ),

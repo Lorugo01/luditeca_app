@@ -195,10 +195,8 @@ class _SettingsLayoutShortcuts extends StatelessWidget {
     return Obx(() {
       // Lê observáveis aqui (fora do LayoutBuilder) para o GetX reagir.
       final menuLabel = prefs.menuLayoutLabel;
-      final activitiesLabel = prefs.activitiesLayoutLabel;
       final libraryLabel = prefs.libraryLayoutLabel;
       final menuId = prefs.menuLayoutId.value;
-      final activitiesId = prefs.activitiesLayoutId.value;
       final libraryId = prefs.libraryLayoutId.value;
 
       return LayoutBuilder(
@@ -214,17 +212,6 @@ class _SettingsLayoutShortcuts extends StatelessWidget {
                 options: kMenuLayoutOptions,
                 selectedId: menuId,
                 onSelected: prefs.setMenuLayout,
-              ),
-            ),
-            _LayoutShortcutCard(
-              icon: Icons.grid_view_rounded,
-              title: 'Layout Atividades',
-              subtitle: activitiesLabel,
-              onTap: () => showSettingsLayoutPicker(
-                title: 'Layout das Atividades',
-                options: kActivitiesLayoutOptions,
-                selectedId: activitiesId,
-                onSelected: prefs.setActivitiesLayout,
               ),
             ),
             _LayoutShortcutCard(

@@ -1,7 +1,9 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../core/models/book_model.dart';
 import '../modules/book/pages/book_details_page.dart';
+import '../modules/library/widgets/cover_aspect_cache.dart';
+import 'still_frame_image.dart';
 
 class BookCard extends StatefulWidget {
   final Map<String, dynamic> book;
@@ -32,12 +34,8 @@ class _BookCardState extends State<BookCard> {
   bool _isAnimating = false;
 
   Future<void> _preloadAndNavigate(BuildContext context) async {
-    final imageUrl = widget.book['cover_image'] ?? '';
-    if (imageUrl.isNotEmpty) {
-      try {
-        await precacheImage(NetworkImage(imageUrl), context);
-      } catch (_) {}
-    }
+    // Sem precache da capa original (até 5 MB): os detalhes usam a cache
+    // de miniaturas e abrem de imediato.
     if (mounted) {
       Get.to(() => BookDetailsPage(book: widget.book));
       setState(() => _opacity = 1.0); // Reset para quando voltar
@@ -81,7 +79,7 @@ class _BookCardState extends State<BookCard> {
 
   @override
   Widget build(BuildContext context) {
-    final imageUrl = widget.book['cover_image'] ?? '';
+    final imageUrl = BookModel.catalogCoverOf(widget.book);
     final title = widget.book['title'] ?? 'Sem título';
 
     return AnimatedOpacity(
@@ -109,14 +107,12 @@ class _BookCardState extends State<BookCard> {
                     ),
                     child:
                         imageUrl.isNotEmpty
-                            ? CachedNetworkImage(
-                              imageUrl: imageUrl,
+                            ? StillFrameImage(
+                              url: imageUrl,
                               width: double.infinity,
                               fit: BoxFit.cover,
-                              errorWidget: (_, __, ___) => _buildPlaceholder(),
-                              placeholder: (_, __) => const Center(
-                                child: CircularProgressIndicator(),
-                              ),
+                              cacheWidth: CoverAspectCache.thumbWidth,
+                              errorWidget: _buildPlaceholder(),
                             )
                             : _buildPlaceholder(),
                   ),

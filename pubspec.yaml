@@ -46,7 +46,6 @@ dependencies:
   mobile_scanner: ^3.5.6
   # Os plugins do Firebase foram removidos para resolver o problema de compilação Windows
   # Adicione-os novamente se precisar utilizar Firebase no futuro
-  animate_do: ^3.3.3
   qr_flutter: ^4.1.0
   # Para extrair cores dominantes de imagens
   palette_generator: ^0.3.3
@@ -61,6 +60,9 @@ dependencies:
   flutter_tts: ^4.2.0
   page_flip: ^0.2.5+1
   cached_network_image: ^3.4.1
+  # Já vinha com o cached_network_image; uso direto para ler o GIF do disco
+  # e descodificar só o primeiro frame.
+  flutter_cache_manager: ^3.4.1
   dio: ^5.9.2
   flutter_dotenv: ^6.0.1
 

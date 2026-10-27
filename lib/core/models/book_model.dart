@@ -50,6 +50,9 @@ class BookModel {
   final String? description;
   final String? ageRange;
   final String? coverImage;
+
+  /// Miniatura estática da capa (1.º frame do GIF). `null` em capas antigas.
+  final String? coverThumb;
   final List<Map<String, dynamic>> pages;
   final String? slidebookLink;
   final DateTime createdAt;
@@ -70,6 +73,7 @@ class BookModel {
     this.description,
     this.ageRange,
     this.coverImage,
+    this.coverThumb,
     required this.pages,
     this.slidebookLink,
     required this.createdAt,
@@ -141,6 +145,8 @@ class BookModel {
       description: asNonEmptyString(json['description']),
       ageRange: asNonEmptyString(json['age_range'] ?? json['ageRange']),
       coverImage: asNonEmptyString(json['cover_image'] ?? json['coverImage']),
+      coverThumb:
+          asNonEmptyString(json['cover_thumb_url'] ?? json['coverThumbUrl']),
       pages: parsedPages,
       slidebookLink: asNonEmptyString(json['link_slidebook']),
       createdAt: DateTime.tryParse('${json['created_at'] ?? ''}') ??
@@ -169,6 +175,7 @@ class BookModel {
       'description': description,
       'age_range': ageRange,
       'cover_image': coverImage,
+      'cover_thumb_url': coverThumb,
       'pages': pages,
       'link_slidebook': slidebookLink,
       'created_at': createdAt.toIso8601String(),
@@ -187,6 +194,16 @@ class BookModel {
   @override
   String toString() {
     return 'BookModel(id: $id, title: $title, kind: ${kind.name}, categoryId: $categoryId, author: $author)';
+  }
+
+  /// Capa para listas: a miniatura quando existe, senão a original.
+  String? get catalogCover => coverThumb ?? coverImage;
+
+  /// Mesma regra para os ecrãs que trabalham com o mapa cru da API.
+  static String catalogCoverOf(Map<String, dynamic> book) {
+    final thumb = book['cover_thumb_url']?.toString().trim() ?? '';
+    if (thumb.isNotEmpty) return thumb;
+    return book['cover_image']?.toString().trim() ?? '';
   }
 
   bool get hasNativePages => pages.isNotEmpty;
@@ -209,6 +226,7 @@ class BookModel {
       description: description,
       ageRange: ageRange,
       coverImage: coverImage,
+      coverThumb: coverThumb,
       pages: pages ?? this.pages,
       slidebookLink: slidebookLink,
       createdAt: createdAt,

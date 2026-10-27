@@ -4,7 +4,7 @@ import 'package:get/get.dart';
 import '../../../core/layout/app_layout_tokens.dart';
 import '../../../core/preferences/layout_option.dart';
 
-/// Bottom sheet para escolher layout (menu, atividades ou biblioteca).
+/// Bottom sheet para escolher layout (menu ou biblioteca).
 Future<void> showSettingsLayoutPicker({
   required String title,
   required List<LayoutOption> options,

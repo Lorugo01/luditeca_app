@@ -1,14 +1,16 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/layout/app_layout_tokens.dart';
 import '../../../core/models/book_model.dart';
 import '../../../core/preferences/app_preferences_controller.dart';
 import '../../../core/services/luditeca_api_service.dart';
 import '../../../core/utils/app_messenger.dart';
+import '../../../widgets/still_frame_image.dart';
 import '../../favorites/controllers/favorites_controller.dart';
+import '../../library/widgets/cover_aspect_cache.dart';
+import '../../library/widgets/cover_layout.dart';
 import '../../library/widgets/library_pattern_background.dart';
 import '../../reader/utils/reading_progress_helper.dart';
 
@@ -67,20 +69,10 @@ class _BookDetailsPageState extends State<BookDetailsPage>
     isFavorite = favoritesController.isFavorite(bookModel);
   }
 
-  Future<void> _preloadBookPages() async {
-    final bookId = widget.book['id'].toString();
-    final prefs = await SharedPreferences.getInstance();
-    final cacheKey = 'book_pages_$bookId';
-    if (prefs.containsKey(cacheKey)) return;
-    try {
-      final apiService = LuditecaApiService();
-      final response = await apiService.getBookById(bookId);
-      if (response != null && response['pages'] != null) {
-        await prefs.setString(cacheKey, response['pages'].toString());
-      }
-    } catch (e) {
-      debugPrint('Erro ao pré-carregar páginas do livro: $e');
-    }
+  /// Aquece a cache em memória do livro completo, para «Ler» abrir sem
+  /// novo pedido (antes gravava `pages.toString()` nas prefs, sem uso).
+  void _preloadBookPages() {
+    LuditecaApiService().prefetchBook(widget.book['id'].toString());
   }
 
   Future<void> _toggleFavorite() async {
@@ -158,6 +150,7 @@ class _BookDetailsPageState extends State<BookDetailsPage>
                         children: [
                           _CoverSection(
                             imageUrl: imageUrl.toString(),
+                            aspectUrl: BookModel.catalogCoverOf(widget.book),
                             flipAnimation: _flipAnimation,
                             fadeAnimation: _fadeAnimation,
                             placeholder: _buildPlaceholder(),
@@ -291,37 +284,139 @@ class _DetailsHeader extends StatelessWidget {
   }
 }
 
-class _CoverSection extends StatelessWidget {
+class _CoverSection extends StatefulWidget {
   const _CoverSection({
     required this.imageUrl,
+    required this.aspectUrl,
     required this.flipAnimation,
     required this.fadeAnimation,
     required this.placeholder,
   });
 
   final String imageUrl;
+
+  /// Miniatura já em cache pela biblioteca; mede a proporção sem o GIF.
+  final String aspectUrl;
   final Animation<double> flipAnimation;
   final Animation<double> fadeAnimation;
   final Widget placeholder;
 
   @override
+  State<_CoverSection> createState() => _CoverSectionState();
+}
+
+class _CoverSectionState extends State<_CoverSection> {
+  double? _aspectRatio;
+
+  @override
+  void initState() {
+    super.initState();
+    _resolveCoverDimensions();
+  }
+
+  @override
+  void didUpdateWidget(_CoverSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.imageUrl != widget.imageUrl) {
+      _aspectRatio = null;
+      _resolveCoverDimensions();
+    }
+  }
+
+  /// Proporção via cache partilhado (descodifica miniatura, não a capa 4K).
+  Future<void> _resolveCoverDimensions() async {
+    final url = widget.aspectUrl.trim();
+    if (url.isEmpty) return;
+    final cached = CoverAspectCache.peek(url);
+    if (cached != null) {
+      _aspectRatio = cached;
+      return;
+    }
+    final ratio = await CoverAspectCache.resolve(url);
+    if (!mounted || ratio == null || url != widget.aspectUrl.trim()) return;
+    setState(() => _aspectRatio = ratio);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final aspect = _aspectRatio ?? 0.71;
+    final pose = CoverLayout.poseForRatio(aspect);
+    final size = CoverLayout.detailsCoverSize(
+      aspectRatio: aspect,
+      screenWidth: screenWidth,
+    );
+    final padding = CoverLayout.innerPadding(size, pose);
+    final borderRadius = pose == CoverShelfPose.lying ? 14.0 : 16.0;
+
+    Widget coverImage() {
+      if (widget.imageUrl.isEmpty) return widget.placeholder;
+      // Uma capa só: aqui o GIF anima. O lado descodificado acompanha
+      // o tamanho real do cartão, com teto baixo para aparelhos fracos.
+      final dpr = MediaQuery.devicePixelRatioOf(context);
+      final cacheW = (size.width * dpr).round().clamp(320, 720);
+      return Padding(
+        padding: EdgeInsets.all(padding),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(borderRadius - 2),
+          child: CachedNetworkImage(
+            imageUrl: widget.imageUrl,
+            fit: CoverLayout.coverFit(pose),
+            width: double.infinity,
+            height: double.infinity,
+            memCacheWidth: cacheW,
+            filterQuality: FilterQuality.low,
+            fadeInDuration: Duration.zero,
+            // GIFs de capa chegam a 67 MB: a miniatura cobre a espera.
+            placeholder: (_, __) => widget.aspectUrl.isEmpty
+                ? widget.placeholder
+                : StillFrameImage(
+                    url: widget.aspectUrl,
+                    fit: CoverLayout.coverFit(pose),
+                    width: double.infinity,
+                    height: double.infinity,
+                    errorWidget: widget.placeholder,
+                  ),
+            errorWidget: (_, __, ___) => widget.placeholder,
+          ),
+        ),
+      );
+    }
+
+    final decoration = BoxDecoration(
+      color: AppLayoutTokens.cardBackground,
+      borderRadius: BorderRadius.circular(borderRadius),
+      border: Border.all(
+        color: AppLayoutTokens.primary.withAlpha(48),
+        width: 2,
+      ),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withAlpha(AppLayoutTokens.isDark ? 80 : 45),
+          blurRadius: 18,
+          offset: const Offset(0, 8),
+        ),
+      ],
+    );
+
     return Center(
       child: Stack(
         alignment: Alignment.center,
         children: [
           AnimatedBuilder(
-            animation: fadeAnimation,
+            animation: widget.fadeAnimation,
             builder: (context, child) {
-              return Opacity(opacity: fadeAnimation.value, child: child);
+              return Opacity(
+                opacity: widget.fadeAnimation.value,
+                child: child,
+              );
             },
-            child: Container(
-              height: 280,
-              width: 200,
-              decoration: BoxDecoration(
-                color: AppLayoutTokens.cardBackground,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppLayoutTokens.subtleBorder),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 280),
+              curve: Curves.easeOutCubic,
+              width: size.width,
+              height: size.height,
+              decoration: decoration.copyWith(
                 boxShadow: [
                   BoxShadow(
                     color: AppLayoutTokens.primary.withAlpha(36),
@@ -333,9 +428,9 @@ class _CoverSection extends StatelessWidget {
             ),
           ),
           AnimatedBuilder(
-            animation: flipAnimation,
+            animation: widget.flipAnimation,
             builder: (context, child) {
-              final angle = flipAnimation.value * 1.2;
+              final angle = widget.flipAnimation.value * 1.2;
               return Transform(
                 alignment: Alignment.centerLeft,
                 transform: Matrix4.identity()
@@ -344,33 +439,14 @@ class _CoverSection extends StatelessWidget {
                 child: child,
               );
             },
-            child: Container(
-              height: 280,
-              width: 200,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: AppLayoutTokens.primary.withAlpha(48),
-                  width: 2,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withAlpha(AppLayoutTokens.isDark ? 80 : 45),
-                    blurRadius: 18,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(14),
-                child: imageUrl.isNotEmpty
-                    ? CachedNetworkImage(
-                        imageUrl: imageUrl,
-                        fit: BoxFit.cover,
-                        errorWidget: (_, __, ___) => placeholder,
-                      )
-                    : placeholder,
-              ),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 280),
+              curve: Curves.easeOutCubic,
+              width: size.width,
+              height: size.height,
+              decoration: decoration,
+              clipBehavior: Clip.antiAlias,
+              child: coverImage(),
             ),
           ),
         ],

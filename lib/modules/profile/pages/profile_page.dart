@@ -1,10 +1,11 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../../core/layout/app_layout_tokens.dart';
+import '../../../core/models/book_model.dart';
 import '../../../core/navigation/app_shell_navigator.dart';
 import '../../../widgets/app_shell_layout.dart';
+import '../../../widgets/still_frame_image.dart';
 import '../../../widgets/app_subpage_header.dart';
 import '../controllers/profile_controller.dart';
 import '../widgets/profile_avatar_widget.dart';
@@ -322,11 +323,12 @@ class _StatisticsSection extends StatelessWidget {
                   itemBuilder: (_, index) {
                     final book = books[index];
                     return ListTile(
-                      leading: book['cover_image'] != null
-                          ? CachedNetworkImage(
-                              imageUrl: book['cover_image'],
+                      leading: BookModel.catalogCoverOf(book).isNotEmpty
+                          ? StillFrameImage(
+                              url: BookModel.catalogCoverOf(book),
                               width: 40,
                               height: 60,
+                              cacheWidth: StillFrameCache.catalogWidth,
                               fit: BoxFit.cover,
                             )
                           : const Icon(Icons.menu_book),

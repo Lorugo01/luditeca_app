@@ -55,8 +55,6 @@ abstract final class AppShellNavigator {
       goToTab(route: '/library', activeRoots: const ['/library', '/category-books']);
   static void goToFavorites() =>
       goToTab(route: '/favorites', activeRoots: const ['/favorites']);
-  static void goToActivities() =>
-      goToTab(route: '/activities', activeRoots: const ['/activities']);
   static void goToSettings() =>
       goToTab(route: '/settings', activeRoots: kSettingsActiveRoots);
 }

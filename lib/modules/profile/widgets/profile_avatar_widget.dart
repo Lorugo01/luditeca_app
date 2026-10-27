@@ -39,6 +39,7 @@ class ProfileAvatarWidget extends StatelessWidget {
               ? CachedNetworkImage(
                   imageUrl: imageUrl,
                   fit: BoxFit.cover,
+                  memCacheWidth: (radius * 6).round(),
                   errorWidget: (_, __, ___) => _fallback(preset),
                 )
               : preset != null

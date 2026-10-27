@@ -52,6 +52,7 @@ class _InteractiveBookReaderPageState extends State<InteractiveBookReaderPage> {
   int? _animatingChoice;
   Worker? _xpSceneWorker;
   bool _sceneAnimating = false;
+  double _sceneDragDx = 0;
 
   /// 1 = avançar, -1 = voltar, 0 = neutro.
   int _transitionDirection = 0;
@@ -261,33 +262,36 @@ class _InteractiveBookReaderPageState extends State<InteractiveBookReaderPage> {
 
   Future<void> _pickChoice(Choice choice, int index) async {
     final controller = _controller;
-    if (controller == null || _animatingChoice != null) return;
+    if (controller == null || _choicesLocked) return;
 
     setState(() => _animatingChoice = index);
     await Future.delayed(_choiceAnimDuration);
-    if (!mounted) return;
+    if (!mounted || _controller == null) return;
 
     _transitionDirection = 1;
     controller.pickChoice(choice);
+    if (!mounted) return;
     setState(() {
       _animatingChoice = null;
       _sceneAnimating = true;
     });
     unawaited(_persistProgress());
     await Future.delayed(_sceneAnimDuration);
-    if (mounted) setState(() => _sceneAnimating = false);
+    if (!mounted) return;
+    setState(() => _sceneAnimating = false);
   }
 
   void _goBackOneScene(InteractiveBookReaderController controller) {
-    if ((controller.state?.history.length ?? 0) < 2 || _sceneAnimating) return;
+    if ((controller.state?.history.length ?? 0) < 2 || _choicesLocked) return;
     _transitionDirection = -1;
     _completionCheckScheduled = false;
     controller.goToPreviousPage();
+    if (!mounted) return;
     setState(() => _sceneAnimating = true);
-    _refreshUi();
-    unawaited(Future<void>.delayed(_sceneAnimDuration).then((_) {
-      if (mounted) setState(() => _sceneAnimating = false);
-    }));
+    Future<void>.delayed(_sceneAnimDuration).then((_) {
+      if (!mounted) return;
+      setState(() => _sceneAnimating = false);
+    });
   }
 
   void _jumpToScene(
@@ -605,10 +609,15 @@ class _InteractiveBookReaderPageState extends State<InteractiveBookReaderPage> {
       curve: Curves.easeInOutCubic,
       reverseCurve: Curves.easeInOutCubic,
     );
-    final horizontal = _transitionDirection >= 0 ? 1.0 : -1.0;
+    // Entrada: direita ao avançar, esquerda ao voltar.
+    // Saída (animação invertida): espelha o movimento oposto.
+    final enterFromRight = _transitionDirection >= 0;
+    final begin = enterFromRight
+        ? const Offset(1, 0)
+        : const Offset(-1, 0);
     return SlideTransition(
       position: Tween<Offset>(
-        begin: Offset(horizontal, 0),
+        begin: begin,
         end: Offset.zero,
       ).animate(curved),
       child: FadeTransition(
@@ -623,6 +632,28 @@ class _InteractiveBookReaderPageState extends State<InteractiveBookReaderPage> {
     );
   }
 
+  Widget _buildSceneGestureLayer({
+    required bool canSwipeBack,
+    required InteractiveBookReaderController controller,
+    required Widget child,
+  }) {
+    if (!canSwipeBack) return child;
+
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onHorizontalDragStart: (_) => _sceneDragDx = 0,
+      onHorizontalDragUpdate: (details) => _sceneDragDx += details.delta.dx,
+      onHorizontalDragEnd: (details) {
+        final velocity = details.primaryVelocity ?? 0;
+        if (velocity > 200 || _sceneDragDx > 56) {
+          _goBackOneScene(controller);
+        }
+        _sceneDragDx = 0;
+      },
+      child: child,
+    );
+  }
+
   Widget _buildSceneBody(
     InteractiveBookReaderController controller,
     StoryPage page,
@@ -632,44 +663,54 @@ class _InteractiveBookReaderPageState extends State<InteractiveBookReaderPage> {
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: _contentMaxWidth),
-        child: AnimatedSwitcher(
-          duration: _sceneAnimDuration,
-          switchInCurve: Curves.easeInOutCubic,
-          switchOutCurve: Curves.easeInOutCubic,
-          transitionBuilder: _pageTurnTransition,
-          layoutBuilder: (current, previous) => Stack(
-            fit: StackFit.expand,
-            clipBehavior: Clip.hardEdge,
-            children: [
-              ...previous,
-              if (current != null) current,
-            ],
-          ),
-          child: KeyedSubtree(
-            key: ValueKey('scene-${page.id}'),
-            child: Column(
+        child: _buildSceneGestureLayer(
+          canSwipeBack: canSwipeBack,
+          controller: controller,
+          child: AnimatedSwitcher(
+            duration: _sceneAnimDuration,
+            switchInCurve: Curves.easeInOutCubic,
+            switchOutCurve: Curves.easeInOutCubic,
+            transitionBuilder: _pageTurnTransition,
+            layoutBuilder: (current, previous) => Stack(
+              fit: StackFit.expand,
+              clipBehavior: Clip.hardEdge,
               children: [
-                Expanded(
-                  flex: 45,
-                  child: GestureDetector(
-                    onHorizontalDragEnd: canSwipeBack
-                        ? (details) {
-                            if ((details.primaryVelocity ?? 0) > 280) {
-                              _goBackOneScene(controller);
-                            }
-                          }
-                        : null,
-                    child: _buildSceneImage(page),
-                  ),
-                ),
-                Expanded(
-                  flex: 55,
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
-                    child: _buildSceneScrollContent(controller, page),
-                  ),
-                ),
+                ...previous,
+                if (current != null) current,
               ],
+            ),
+            child: KeyedSubtree(
+              key: ValueKey('scene-${page.id}'),
+              child: Column(
+                children: [
+                  Expanded(
+                    flex: 45,
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        return GestureDetector(
+                          behavior: HitTestBehavior.translucent,
+                          onTapUp: canSwipeBack
+                              ? (details) {
+                                  if (details.localPosition.dx <
+                                      constraints.maxWidth * 0.34) {
+                                    _goBackOneScene(controller);
+                                  }
+                                }
+                              : null,
+                          child: _buildSceneImage(page),
+                        );
+                      },
+                    ),
+                  ),
+                  Expanded(
+                    flex: 55,
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
+                      child: _buildSceneScrollContent(controller, page),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -840,6 +881,7 @@ class _InteractiveBookReaderPageState extends State<InteractiveBookReaderPage> {
         fit: BoxFit.contain,
         width: double.infinity,
         height: double.infinity,
+        animate: true,
         errorBuilder: (_, __, ___) => _imagePlaceholder(),
       );
     }

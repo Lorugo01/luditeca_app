@@ -175,7 +175,8 @@ class _BookReadingPreparePageState extends State<BookReadingPreparePage> {
         title: widget.book.title,
         phaseLabel: _phase,
         progress: _progress,
-        coverUrl: widget.book.coverImage,
+        // Miniatura estática: o GIF da capa (dezenas de MB) só na ficha.
+        coverUrl: widget.book.catalogCover,
       ),
     );
   }

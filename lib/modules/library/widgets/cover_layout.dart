@@ -94,5 +94,58 @@ abstract final class CoverLayout {
     };
   }
 
+  /// Tamanho da capa na página de detalhes (mesma lógica de orientação da biblioteca).
+  static Size detailsCoverSize({
+    required double aspectRatio,
+    required double screenWidth,
+  }) {
+    final ratio = aspectRatio > 0 ? aspectRatio : _defaultAspectRatio;
+    final pose = poseForRatio(ratio);
+    final maxH = (screenWidth * 0.52).clamp(220.0, 340.0);
+    final maxW = (screenWidth * 0.78).clamp(260.0, 520.0);
+
+    return switch (pose) {
+      CoverShelfPose.standing => () {
+        final h = maxH;
+        final w = (h * ratio).clamp(150.0, maxW * 0.58);
+        return Size(w, h);
+      }(),
+      CoverShelfPose.lying => () {
+        final w = maxW;
+        final h = (w / ratio).clamp(140.0, maxH * 0.78);
+        return Size(w, h);
+      }(),
+      CoverShelfPose.square => () {
+        final side = math.min(maxW * 0.62, maxH * 0.88).clamp(200.0, 300.0);
+        return Size(side, side);
+      }(),
+    };
+  }
+
+  /// Tamanho da capa no ecrã de preparação do livro (antes de abrir o leitor).
+  static Size loadingCoverSize({required double aspectRatio}) {
+    final ratio = aspectRatio > 0 ? aspectRatio : _defaultAspectRatio;
+    final pose = poseForRatio(ratio);
+    const maxH = 150.0;
+    const maxW = 220.0;
+
+    return switch (pose) {
+      CoverShelfPose.standing => () {
+        final h = maxH;
+        final w = (h * ratio).clamp(88.0, maxW * 0.55);
+        return Size(w, h);
+      }(),
+      CoverShelfPose.lying => () {
+        final w = maxW;
+        final h = (w / ratio).clamp(80.0, maxH * 0.85);
+        return Size(w, h);
+      }(),
+      CoverShelfPose.square => () {
+        final side = math.min(maxW * 0.55, maxH).clamp(110.0, 140.0);
+        return Size(side, side);
+      }(),
+    };
+  }
+
   static double labelWidthFor(Size coverSize) => coverSize.width + 14;
 }

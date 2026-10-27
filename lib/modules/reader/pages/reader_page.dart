@@ -6,7 +6,7 @@ import 'package:get/get.dart';
 import 'package:just_audio/just_audio.dart';
 import '../controllers/reader_controller.dart';
 import '../models/book_element.dart';
-import 'package:animate_do/animate_do.dart';
+import '../../../widgets/entrance_animation.dart';
 import '../widgets/image_element_widget.dart';
 import '../widgets/shape_element_widget.dart';
 import '../widgets/reader_rich_text.dart';
@@ -29,26 +29,22 @@ class ReaderPage extends StatefulWidget {
   final String bookId;
   final int? initialPage;
   final int? initialStep;
-  final ReaderController controller = Get.put(ReaderController());
 
-  ReaderPage({
+  // Sem efeitos no construtor: cada rebuild do pai recriaria o widget e
+  // dispararia `loadBook` de novo (loop de isLoading → rebuild).
+  const ReaderPage({
     super.key,
     required this.bookId,
     this.initialPage,
     this.initialStep,
-  }) {
-    controller.loadBook(
-      bookId,
-      initialPage: initialPage,
-      initialStep: initialStep,
-    );
-  }
+  });
 
   @override
   State<ReaderPage> createState() => _ReaderPageState();
 }
 
 class _ReaderPageState extends State<ReaderPage> {
+  late final ReaderController _controller;
   late double scale;
   late double offsetX;
   late double offsetY;
@@ -62,6 +58,12 @@ class _ReaderPageState extends State<ReaderPage> {
   @override
   void initState() {
     super.initState();
+    _controller = Get.put(ReaderController());
+    _controller.loadBook(
+      widget.bookId,
+      initialPage: widget.initialPage,
+      initialStep: widget.initialStep,
+    );
 
     // Forçar orientação horizontal
     SystemChrome.setPreferredOrientations([
@@ -132,8 +134,8 @@ class _ReaderPageState extends State<ReaderPage> {
   Future<void> _autoAdvanceSteps() async {
     while (_autoPlay) {
       try {
-        final currentStep = widget.controller.currentStep;
-        final currentPage = widget.controller.currentPage;
+        final currentStep = _controller.currentStep;
+        final currentPage = _controller.currentPage;
         if (currentPage == null) break;
 
         final maxStep = currentPage.elements.fold<int>(
@@ -178,17 +180,17 @@ class _ReaderPageState extends State<ReaderPage> {
         if (!_autoPlay) break;
 
         if (currentStep < maxStep) {
-          widget.controller.nextStep();
+          _controller.nextStep();
           await _checkAndShowCompletionMessage();
         } else {
           // Se for a última página, para o autoplay
-          if (widget.controller.currentPageIndex >=
-              widget.controller.pages.length - 1) {
+          if (_controller.currentPageIndex >=
+              _controller.pages.length - 1) {
             setState(() => _autoPlay = false);
             await _cleanupAudioPlayers();
             break;
           } else {
-            widget.controller.nextPage();
+            _controller.nextPage();
           }
         }
 
@@ -205,73 +207,30 @@ class _ReaderPageState extends State<ReaderPage> {
 
   Widget _buildAnimatedElement(BookElement element, Widget child) {
     // Se o elemento já foi mostrado em uma etapa anterior, não aplica a animação
-    if (element.step < widget.controller.currentStep) {
+    if (element.step < _controller.currentStep) {
       return child;
     }
 
-    final anim = _normalizeAnimationName(element.animation);
-    switch (anim) {
-      case 'fadein':
-        return FadeIn(
-          duration: const Duration(milliseconds: 500),
-          child: child,
-        );
-      case 'fadeinup':
-        return FadeInUp(
-          duration: const Duration(milliseconds: 500),
-          child: child,
-        );
-      case 'fadeindown':
-        return FadeInDown(
-          duration: const Duration(milliseconds: 500),
-          child: child,
-        );
-      case 'fadeinleft':
-        return FadeInLeft(
-          duration: const Duration(milliseconds: 500),
-          child: child,
-        );
-      case 'fadeinright':
-        return FadeInRight(
-          duration: const Duration(milliseconds: 500),
-          child: child,
-        );
-      case 'zoomin':
-        return ZoomIn(
-          duration: const Duration(milliseconds: 500),
-          child: child,
-        );
-      case 'bounce':
-        return ElasticIn(
-          duration: const Duration(milliseconds: 500),
-          child: child,
-        );
-      case 'pulse':
-        return Pulse(duration: const Duration(milliseconds: 500), child: child);
-      case 'rubberband':
-        return RubberBand(
-          duration: const Duration(milliseconds: 500),
-          child: child,
-        );
-      case 'slideinleft':
-        return SlideInLeft(
-          duration: const Duration(milliseconds: 500),
-          child: child,
-        );
-      case 'slideinright':
-        return SlideInRight(
-          duration: const Duration(milliseconds: 500),
-          child: child,
-        );
-      case 'flash':
-        return Flash(
-          duration: const Duration(milliseconds: 500),
-          child: child,
-        );
-      default:
-        return child;
-    }
+    final effect = _effects[_normalizeAnimationName(element.animation)];
+    if (effect == null) return child;
+    return EntranceAnimation(effect: effect, child: child);
   }
+
+  /// Nomes do editor (sem prefixo `animate__`) → efeito de entrada.
+  static const Map<String, EntranceEffect> _effects = {
+    'fadein': EntranceEffect.fade,
+    'fadeinup': EntranceEffect.fadeUp,
+    'fadeindown': EntranceEffect.fadeDown,
+    'fadeinleft': EntranceEffect.fadeLeft,
+    'fadeinright': EntranceEffect.fadeRight,
+    'zoomin': EntranceEffect.zoom,
+    'bounce': EntranceEffect.elastic,
+    'pulse': EntranceEffect.pulse,
+    'rubberband': EntranceEffect.rubberBand,
+    'slideinleft': EntranceEffect.slideLeft,
+    'slideinright': EntranceEffect.slideRight,
+    'flash': EntranceEffect.flash,
+  };
 
   String _normalizeAnimationName(String? raw) {
     if (raw == null || raw.trim().isEmpty) return '';
@@ -283,9 +242,6 @@ class _ReaderPageState extends State<ReaderPage> {
   }
 
   Widget _buildElement(BookElement element) {
-    // Debug log
-    debugPrint('Elemento: ${element.type}, Audio: ${element.audio}');
-
     Widget elementWidget;
 
     switch (element.type) {
@@ -469,6 +425,7 @@ class _ReaderPageState extends State<ReaderPage> {
     BookPage page,
     List<BookElement> visibleElements,
   ) {
+    final usedKeys = <String>{};
     return Stack(
       clipBehavior: Clip.none,
       children: [
@@ -479,13 +436,23 @@ class _ReaderPageState extends State<ReaderPage> {
                   : OfflineBookImage(
                     url: page.background,
                     fit: BoxFit.cover,
+                    animate: true,
                     errorBuilder: (context, error, stackTrace) {
                       return ColoredBox(color: Colors.grey.shade300);
                     },
                   ),
         ),
         ...visibleElements.map((element) {
+          // Chave estável: ao avançar a etapa, cada elemento mantém o seu
+          // estado e só os novos correm a animação de entrada. IDs repetidos
+          // (copiar/colar no editor) recebem sufixo para não colidirem.
+          var keyId = element.id;
+          var dup = 1;
+          while (!usedKeys.add(keyId)) {
+            keyId = '${element.id}#${dup++}';
+          }
           return Positioned(
+            key: ValueKey<String>(keyId),
             left: element.position.x * scale,
             top: element.position.y * scale,
             width: element.size.width * scale,
@@ -500,10 +467,10 @@ class _ReaderPageState extends State<ReaderPage> {
   Future<void> _checkAndShowCompletionMessage() async {
     if (_hasShownCompletionMessage) return;
 
-    final currentPageIndex = widget.controller.currentPageIndex;
-    final currentStep = widget.controller.currentStep;
-    final totalPages = widget.controller.pages.length;
-    final currentPage = widget.controller.currentPage;
+    final currentPageIndex = _controller.currentPageIndex;
+    final currentStep = _controller.currentStep;
+    final totalPages = _controller.pages.length;
+    final currentPage = _controller.currentPage;
 
     if (currentPage != null) {
       final maxStep = currentPage.elements.fold<int>(
@@ -552,10 +519,10 @@ class _ReaderPageState extends State<ReaderPage> {
 
     if (_authController.isAuthenticated) {
       final userId = _authController.currentUser!['id'].toString();
-      final currentPageIndex = widget.controller.currentPageIndex;
-      final currentStep = widget.controller.currentStep;
-      final totalPages = widget.controller.pages.length;
-      final currentPage = widget.controller.currentPage;
+      final currentPageIndex = _controller.currentPageIndex;
+      final currentStep = _controller.currentStep;
+      final totalPages = _controller.pages.length;
+      final currentPage = _controller.currentPage;
       if (currentPage != null) {
         final maxStep = currentPage.elements.fold<int>(
           0,
@@ -590,8 +557,8 @@ class _ReaderPageState extends State<ReaderPage> {
   Future<void> _addBookToProgressIfNeeded() async {
     if (_authController.isAuthenticated) {
       final userId = _authController.currentUser!['id'].toString();
-      final currentPageIndex = widget.controller.currentPageIndex;
-      final currentStep = widget.controller.currentStep;
+      final currentPageIndex = _controller.currentPageIndex;
+      final currentStep = _controller.currentStep;
       await _apiService.updateReadingProgress(
         userId,
         widget.bookId,
@@ -611,22 +578,22 @@ class _ReaderPageState extends State<ReaderPage> {
       },
       child: Scaffold(
         body: Obx(() {
-          if (widget.controller.isLoading) {
+          if (_controller.isLoading) {
             return const Center(child: CircularProgressIndicator());
           }
 
-          if (widget.controller.error != null) {
+          if (_controller.error != null) {
             return Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
-                    widget.controller.error!,
+                    _controller.error!,
                     style: const TextStyle(color: Colors.red),
                   ),
                   const SizedBox(height: 16),
                   ElevatedButton(
-                    onPressed: () => widget.controller.loadBook(widget.bookId),
+                    onPressed: () => _controller.loadBook(widget.bookId),
                     child: const Text('Tentar novamente'),
                   ),
                 ],
@@ -634,7 +601,7 @@ class _ReaderPageState extends State<ReaderPage> {
             );
           }
 
-          if (widget.controller.currentPage == null) {
+          if (_controller.currentPage == null) {
             return const Center(child: Text('Nenhuma página disponível'));
           }
 
@@ -652,8 +619,8 @@ class _ReaderPageState extends State<ReaderPage> {
           offsetX = (screenSize.width - contentWidth) / 2;
           offsetY = (screenSize.height - contentHeight) / 2;
 
-          final currentPage = widget.controller.currentPage!;
-          final pageIndex = widget.controller.currentPageIndex;
+          final currentPage = _controller.currentPage!;
+          final pageIndex = _controller.currentPageIndex;
           final pt = currentPage.pageTransition;
           final switchMs =
               pt.type.toLowerCase() == 'none'
@@ -684,7 +651,7 @@ class _ReaderPageState extends State<ReaderPage> {
                       key: ValueKey<int>(pageIndex),
                       child: _buildPageCanvasStack(
                         currentPage,
-                        widget.controller.getVisibleElements(),
+                        _controller.getVisibleElements(),
                       ),
                     ),
                   ),
@@ -701,7 +668,7 @@ class _ReaderPageState extends State<ReaderPage> {
                       // Botão voltar
                       IconButton(
                         onPressed: () {
-                          widget.controller.previousStep();
+                          _controller.previousStep();
                         },
                         icon: const Icon(Icons.arrow_back, color: Colors.white),
                       ),
@@ -718,7 +685,7 @@ class _ReaderPageState extends State<ReaderPage> {
                       // Botão avançar
                       IconButton(
                         onPressed: () {
-                          widget.controller.nextStep();
+                          _controller.nextStep();
                           _checkAndShowCompletionMessage();
                         },
                         icon: const Icon(
@@ -773,12 +740,12 @@ class _ReaderPageState extends State<ReaderPage> {
   }
 
   Widget _buildStepDots() {
-    final currentPage = widget.controller.currentPage;
+    final currentPage = _controller.currentPage;
     if (currentPage == null) return const SizedBox();
     // Descobre o número de etapas distintas na página
     final steps =
         currentPage.elements.map((e) => e.step).toSet().toList()..sort();
-    final currentStep = widget.controller.currentStep;
+    final currentStep = _controller.currentStep;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: List.generate(steps.length, (index) {

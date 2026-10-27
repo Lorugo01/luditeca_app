@@ -1,4 +1,3 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -6,6 +5,8 @@ import '../../../core/layout/app_layout_tokens.dart';
 import '../../../core/layout/book_cover_grid.dart';
 import '../../../core/models/book_model.dart';
 import '../../../core/preferences/app_preferences_controller.dart';
+import '../../../widgets/still_frame_image.dart';
+import 'cover_aspect_cache.dart';
 import '../controllers/library_controller.dart';
 import 'library_layout.dart';
 import 'library_shelf.dart';
@@ -54,42 +55,48 @@ class LibraryBooksBody extends StatelessWidget {
       shelves.add(books.sublist(i, end));
     }
 
-    return ListView(
+    return ListView.builder(
       padding: EdgeInsets.fromLTRB(compact ? 4 : 8, compact ? 12 : 16, compact ? 4 : 8, 32),
-      children: [
-        Center(
-          child: Container(
-            padding: EdgeInsets.symmetric(
-              horizontal: compact ? 12 : 16,
-              vertical: compact ? 6 : 8,
-            ),
-            decoration: BoxDecoration(
-              color: AppLayoutTokens.elevatedSurface,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppLayoutTokens.subtleBorder),
-            ),
-            child: Text(
-              compact
-                  ? 'Toque para abrir • Deslize'
-                  : 'Toque para abrir • Deslize para ver mais',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: compact ? 12 : 13,
-                fontWeight: FontWeight.w800,
-                color: AppLayoutTokens.textPrimary,
-                height: 1.25,
+      itemCount: shelves.length + 1,
+      itemBuilder: (context, index) {
+        if (index == 0) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: Center(
+              child: Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: compact ? 12 : 16,
+                  vertical: compact ? 6 : 8,
+                ),
+                decoration: BoxDecoration(
+                  color: AppLayoutTokens.elevatedSurface,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppLayoutTokens.subtleBorder),
+                ),
+                child: Text(
+                  compact
+                      ? 'Toque para abrir • Deslize'
+                      : 'Toque para abrir • Deslize para ver mais',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: compact ? 12 : 13,
+                    fontWeight: FontWeight.w800,
+                    color: AppLayoutTokens.textPrimary,
+                    height: 1.25,
+                  ),
+                ),
               ),
             ),
-          ),
-        ),
-        const SizedBox(height: 16),
-        for (var si = 0; si < shelves.length; si++)
-          LibraryShelf(
-            books: shelves[si],
-            startIndex: si * LibraryController.booksPerShelf,
-            onBookTap: controller.openBook,
-          ),
-      ],
+          );
+        }
+
+        final si = index - 1;
+        return LibraryShelf(
+          books: shelves[si],
+          startIndex: si * LibraryController.booksPerShelf,
+          onBookTap: controller.openBook,
+        );
+      },
     );
   }
 
@@ -120,7 +127,7 @@ class LibraryBooksBody extends StatelessWidget {
       separatorBuilder: (_, __) => const SizedBox(height: 8),
       itemBuilder: (context, index) {
         final book = books[index];
-        final cover = book.coverImage ?? '';
+        final cover = book.catalogCover ?? '';
         return Material(
           color: AppLayoutTokens.cardBackground,
           borderRadius: BorderRadius.circular(16),
@@ -134,7 +141,13 @@ class LibraryBooksBody extends StatelessWidget {
                   ClipRRect(
                     borderRadius: BorderRadius.circular(10),
                     child: cover.isNotEmpty
-                        ? CachedNetworkImage(imageUrl: cover, width: 56, height: 72, fit: BoxFit.cover)
+                        ? StillFrameImage(
+                            url: cover,
+                            width: 56,
+                            height: 72,
+                            cacheWidth: CoverAspectCache.thumbWidth,
+                            fit: BoxFit.cover,
+                          )
                         : Container(
                             width: 56,
                             height: 72,

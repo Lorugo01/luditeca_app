@@ -8,12 +8,10 @@ import 'layout_option.dart';
 /// Preferências de layout e tema (persistidas localmente).
 class AppPreferencesController extends GetxController {
   static const _keyMenu = 'pref_menu_layout';
-  static const _keyActivities = 'pref_activities_layout';
   static const _keyLibrary = 'pref_library_layout';
   static const _keyTheme = 'pref_app_theme';
 
   final RxString menuLayoutId = 'grid'.obs;
-  final RxString activitiesLayoutId = 'grid'.obs;
   final RxString libraryLayoutId = 'shelf'.obs;
   final RxString appThemeId = AppThemeRegistry.defaultId.obs;
 
@@ -26,7 +24,6 @@ class AppPreferencesController extends GetxController {
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
     menuLayoutId.value = prefs.getString(_keyMenu) ?? 'grid';
-    activitiesLayoutId.value = prefs.getString(_keyActivities) ?? 'grid';
     libraryLayoutId.value = prefs.getString(_keyLibrary) ?? 'shelf';
 
     final storedTheme = AppThemeRegistry.normalizeId(
@@ -42,12 +39,6 @@ class AppPreferencesController extends GetxController {
     menuLayoutId.value = id;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keyMenu, id);
-  }
-
-  Future<void> setActivitiesLayout(String id) async {
-    activitiesLayoutId.value = id;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_keyActivities, id);
   }
 
   Future<void> setLibraryLayout(String id) async {
@@ -70,11 +61,6 @@ class AppPreferencesController extends GetxController {
 
   String get menuLayoutLabel =>
       findLayoutOption(kMenuLayoutOptions, menuLayoutId.value)?.pickerLabel ??
-      '⊞ Grade 2×2';
-
-  String get activitiesLayoutLabel =>
-      findLayoutOption(kActivitiesLayoutOptions, activitiesLayoutId.value)
-          ?.pickerLabel ??
       '⊞ Grade 2×2';
 
   String get libraryLayoutLabel =>

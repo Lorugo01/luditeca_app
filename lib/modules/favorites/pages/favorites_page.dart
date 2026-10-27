@@ -1,4 +1,3 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -7,6 +6,8 @@ import '../../../core/layout/book_cover_grid.dart';
 import '../../../core/models/book_model.dart';
 import '../../../core/navigation/app_shell_navigator.dart';
 import '../../../widgets/app_shell_layout.dart';
+import '../../../widgets/still_frame_image.dart';
+import '../../library/widgets/cover_aspect_cache.dart';
 import '../../book/pages/book_details_page.dart';
 import '../controllers/favorites_controller.dart';
 
@@ -231,7 +232,7 @@ class _FavoriteBookCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cover = book.coverImage ?? '';
+    final cover = book.catalogCover ?? '';
 
     return Material(
       color: Colors.transparent,
@@ -268,10 +269,11 @@ class _FavoriteBookCard extends StatelessWidget {
                     fit: StackFit.expand,
                     children: [
                       if (cover.isNotEmpty)
-                        CachedNetworkImage(
-                          imageUrl: cover,
+                        StillFrameImage(
+                          url: cover,
                           fit: BoxFit.cover,
-                          errorWidget: (_, __, ___) => _coverPlaceholder(),
+                          cacheWidth: CoverAspectCache.thumbWidth,
+                          errorWidget: _coverPlaceholder(),
                         )
                       else
                         _coverPlaceholder(),

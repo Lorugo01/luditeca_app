@@ -14,6 +14,7 @@ class HomeController extends GetxController {
   final RxBool _isLoading = false.obs;
   final RxBool _isLoadingProgress = false.obs;
   final RxString _error = ''.obs;
+  bool _progressInflight = false;
 
   // Variável para rastrear a rota atual
   final RxString _currentRoute = ''.obs;
@@ -54,23 +55,28 @@ class HomeController extends GetxController {
     );
   }
 
-  // Método para carregar todos os dados
-  Future<void> _loadData() async {
-    loadBooks();
-    if (_authController.isAuthenticated) {
-      loadBooksInProgress();
-    }
+  // Método para carregar todos os dados. O catálogo vem da cache em memória
+  // da API (só [forceRefresh] vai à rede); o progresso é sempre relido.
+  Future<void> _loadData({bool forceRefresh = false}) async {
+    await Future.wait([
+      loadBooks(forceRefresh: forceRefresh),
+      if (_authController.isAuthenticated) loadBooksInProgress(),
+    ]);
   }
 
-  // Método para forçar atualização dos dados manualmente
-  Future<void> refreshData() async {
-    await _loadData();
+  // Pull-to-refresh: força nova leitura do catálogo.
+  Future<void> refreshData({bool forceRefresh = true}) async {
+    await _loadData(forceRefresh: forceRefresh);
   }
 
-  Future<void> loadBooks() async {
-    _setLoading(true);
+  /// Regresso ao ecrã / app retomada: reaproveita a cache do catálogo.
+  Future<void> reloadOnReturn() => _loadData();
+
+  Future<void> loadBooks({bool forceRefresh = false}) async {
+    // Só mostra o indicador quando ainda não há nada para mostrar.
+    if (_books.isEmpty) _setLoading(true);
     try {
-      final books = await _apiService.getBooks();
+      final books = await _apiService.getBooks(forceRefresh: forceRefresh);
 
       // Ordenar por ID em ordem decrescente
       books.sort((a, b) => (b['id'] as int).compareTo(a['id'] as int));
@@ -84,8 +90,11 @@ class HomeController extends GetxController {
 
   Future<void> loadBooksInProgress() async {
     if (!_authController.isAuthenticated) return;
+    // Evita pedidos sobrepostos (rota + lifecycle + regresso do leitor).
+    if (_progressInflight) return;
+    _progressInflight = true;
 
-    _isLoadingProgress.value = true;
+    if (_booksInProgress.isEmpty) _isLoadingProgress.value = true;
     try {
       final userId = _authController.currentUser!['id'].toString();
       final booksInProgress = await _apiService.getBooksInProgress(userId);
@@ -94,6 +103,7 @@ class HomeController extends GetxController {
       _setError('Erro ao carregar livros em progresso: $e');
     } finally {
       _isLoadingProgress.value = false;
+      _progressInflight = false;
     }
   }
 

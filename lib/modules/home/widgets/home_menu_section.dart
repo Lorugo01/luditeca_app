@@ -111,13 +111,6 @@ class HomeMenuSection extends StatelessWidget {
         onTap: AppShellNavigator.goToFavorites,
       ),
       _HomeMenuItem(
-        label: 'Atividades & Jogos',
-        emoji: '🎮',
-        gradient: const LinearGradient(colors: [Color(0xFF22C55E), Color(0xFF0EA5E9)]),
-        shadowColor: const Color(0xFF22C55E),
-        onTap: AppShellNavigator.goToActivities,
-      ),
-      _HomeMenuItem(
         label: 'Conquistas',
         emoji: '🏆',
         gradient: const LinearGradient(colors: [Color(0xFFF59E0B), Color(0xFFF97316)]),

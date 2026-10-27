@@ -57,6 +57,15 @@ class BookOfflineCache {
   static const _rootFolder = 'luditeca_offline';
   static const _batchSize = 4;
 
+  /// Ilustrações descarregadas antes de abrir o leitor (capa + 1.ª páginas).
+  static const _eagerCount = 4;
+
+  /// Livros com download em segundo plano a decorrer.
+  final Set<int> _backgroundJobs = {};
+
+  /// Transferências em curso por caminho de destino.
+  final Map<String, Future<void>> _inflightFiles = {};
+
   /// Cliente dedicado a downloads de media (sem token; ficheiros públicos).
   final Dio _dio = Dio(
     BaseOptions(
@@ -221,11 +230,65 @@ class BookOfflineCache {
       await imagesDir.create(recursive: true);
     }
 
+    // Só as primeiras ilustrações bloqueiam a abertura do leitor; o resto
+    // descarrega em segundo plano (páginas de PPTX podem ter GIFs de 40 MB).
+    final eager = urls.take(_eagerCount).toList();
+    final rest = urls.skip(_eagerCount).toList();
+
     final urlToRel = <String, String>{};
-    var done = 0;
     final total = urls.length;
     onProgress?.call('A guardar ilustrações (0/$total)…', 0.12);
 
+    await _downloadBatches(
+      urls: eager,
+      imagesDir: imagesDir,
+      urlToRel: urlToRel,
+      onBatchDone: (done) => onProgress?.call(
+        'A guardar ilustrações ($done/$total)…',
+        0.12 + (done / eager.length) * 0.82,
+      ),
+    );
+
+    // Manifesto parcial: se a app fechar a meio, a próxima abertura retoma
+    // (ficheiros já existentes são reaproveitados).
+    await _writeManifest(dir, urlToRel);
+    await _saveBookJson(dir, loaded);
+    await _updateIndex(loaded, urlToRel.length);
+
+    if (rest.isNotEmpty) {
+      _startBackgroundDownload(
+        book: loaded,
+        dir: dir,
+        imagesDir: imagesDir,
+        urls: rest,
+        urlToRel: urlToRel,
+      );
+    }
+
+    final localPaths = <String, String>{};
+    for (final e in urlToRel.entries) {
+      localPaths[e.key] = p.join(dir.path, e.value);
+    }
+
+    onProgress?.call(
+      rest.isEmpty ? 'Pronto para ler offline' : 'A abrir o livro…',
+      1,
+    );
+
+    return BookOfflinePrepareResult(
+      book: loaded,
+      urlToLocalPath: localPaths,
+      fromCache: false,
+    );
+  }
+
+  Future<void> _downloadBatches({
+    required List<String> urls,
+    required Directory imagesDir,
+    required Map<String, String> urlToRel,
+    void Function(int done)? onBatchDone,
+    void Function(String url, String rel)? onFile,
+  }) async {
     for (var i = 0; i < urls.length; i += _batchSize) {
       final end = (i + _batchSize < urls.length) ? i + _batchSize : urls.length;
       final batch = urls.sublist(i, end);
@@ -236,35 +299,47 @@ class BookOfflineCache {
             imagesDir: imagesDir,
             urlToRel: urlToRel,
           );
-          urlToRel[url] = rel;
+          onFile?.call(url, rel);
         } catch (e) {
           debugPrint('BookOfflineCache: falha $url — $e');
         }
       }));
-      done = end;
-      final progress = 0.12 + (done / total) * 0.82;
-      onProgress?.call(
-        'A guardar ilustrações ($done/$total)…',
-        progress,
-      );
+      onBatchDone?.call(end);
     }
+  }
 
-    await _writeManifest(dir, urlToRel);
-    await _saveBookJson(dir, loaded);
-    await _updateIndex(loaded, urlToRel.length);
+  /// Continua o download das restantes ilustrações sem bloquear a leitura.
+  /// Cada ficheiro concluído passa a ser servido do disco na sessão activa.
+  void _startBackgroundDownload({
+    required BookModel book,
+    required Directory dir,
+    required Directory imagesDir,
+    required List<String> urls,
+    required Map<String, String> urlToRel,
+  }) {
+    if (_backgroundJobs.contains(book.id)) return;
+    _backgroundJobs.add(book.id);
 
-    final localPaths = <String, String>{};
-    for (final e in urlToRel.entries) {
-      localPaths[e.key] = p.join(dir.path, e.value);
-    }
-
-    onProgress?.call('Pronto para ler offline', 1);
-
-    return BookOfflinePrepareResult(
-      book: loaded,
-      urlToLocalPath: localPaths,
-      fromCache: false,
-    );
+    Future<void>(() async {
+      try {
+        await _downloadBatches(
+          urls: urls,
+          imagesDir: imagesDir,
+          urlToRel: urlToRel,
+          onFile: (url, rel) => BookOfflineSession.register(
+            book.id,
+            url,
+            p.join(dir.path, rel),
+          ),
+        );
+        await _writeManifest(dir, urlToRel);
+        await _updateIndex(book, urlToRel.length);
+      } catch (e) {
+        debugPrint('BookOfflineCache: download em segundo plano falhou — $e');
+      } finally {
+        _backgroundJobs.remove(book.id);
+      }
+    });
   }
 
   Future<void> _cacheDigitalBook(
@@ -326,26 +401,48 @@ class BookOfflineCache {
       urlToRel[url] = rel;
       return rel;
     }
-    await _downloadUrlToFile(url, dest);
+    // Mesmo ficheiro pedido em paralelo (ex.: reabrir o livro com o download
+    // em segundo plano a decorrer) partilha a mesma transferência.
+    final inflight = _inflightFiles[dest.path];
+    if (inflight != null) {
+      await inflight;
+    } else {
+      final job = _downloadUrlToFile(url, dest);
+      _inflightFiles[dest.path] = job;
+      try {
+        await job;
+      } finally {
+        _inflightFiles.remove(dest.path);
+      }
+    }
     final rel = p.join('images', name);
     urlToRel[url] = rel;
     return rel;
   }
 
+  /// Descarrega em stream para um ficheiro temporário e só depois renomeia:
+  /// evita ter o ficheiro inteiro (até dezenas de MB) em memória e nunca deixa
+  /// ficheiros truncados com o nome final se a app fechar a meio.
   Future<void> _downloadUrlToFile(String url, File dest) async {
-    final response = await _dio.get<List<int>>(url);
-    final status = response.statusCode ?? 0;
-    if (status < 200 || status >= 300) {
-      throw Exception('HTTP $status');
-    }
-    final bytes = response.data;
-    if (bytes == null || bytes.isEmpty) {
-      throw Exception('Resposta vazia ao transferir $url');
-    }
     if (!await dest.parent.exists()) {
       await dest.parent.create(recursive: true);
     }
-    await dest.writeAsBytes(bytes);
+    final tmp = File('${dest.path}.part');
+    try {
+      final response = await _dio.download(url, tmp.path);
+      final status = response.statusCode ?? 0;
+      if (status < 200 || status >= 300) {
+        throw Exception('HTTP $status');
+      }
+      if (!await tmp.exists() || await tmp.length() == 0) {
+        throw Exception('Resposta vazia ao transferir $url');
+      }
+      await tmp.rename(dest.path);
+    } finally {
+      if (await tmp.exists()) {
+        await tmp.delete();
+      }
+    }
   }
 
   String _fileNameForUrl(String url) {

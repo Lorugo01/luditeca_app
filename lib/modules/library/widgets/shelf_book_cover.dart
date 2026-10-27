@@ -1,7 +1,8 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/models/book_model.dart';
+import '../../../widgets/still_frame_image.dart';
+import 'cover_aspect_cache.dart';
 import 'cover_layout.dart';
 
 /// Capa na prateleira — tamanho e pose adaptados à orientação da imagem.
@@ -48,57 +49,35 @@ class ShelfBookCover extends StatefulWidget {
 
 class _ShelfBookCoverState extends State<ShelfBookCover> {
   double? _aspectRatio;
-  ImageStream? _imageStream;
-  ImageStreamListener? _imageListener;
 
   @override
   void initState() {
     super.initState();
-    _resolveCoverDimensions();
+    _loadAspect();
   }
 
   @override
   void didUpdateWidget(ShelfBookCover oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.book.coverImage != widget.book.coverImage) {
-      _disposeImageListener();
+    if (oldWidget.book.catalogCover != widget.book.catalogCover) {
       _aspectRatio = null;
-      _resolveCoverDimensions();
+      _loadAspect();
     }
   }
 
-  @override
-  void dispose() {
-    _disposeImageListener();
-    super.dispose();
-  }
-
-  void _disposeImageListener() {
-    if (_imageStream != null && _imageListener != null) {
-      _imageStream!.removeListener(_imageListener!);
-    }
-    _imageStream = null;
-    _imageListener = null;
-  }
-
-  void _resolveCoverDimensions() {
-    final url = widget.book.coverImage;
+  Future<void> _loadAspect() async {
+    final url = widget.book.catalogCover;
     if (url == null || url.isEmpty) return;
 
-    final provider = CachedNetworkImageProvider(url);
-    _imageStream = provider.resolve(ImageConfiguration.empty);
-    _imageListener = ImageStreamListener(
-      (ImageInfo info, bool _) {
-        final w = info.image.width.toDouble();
-        final h = info.image.height.toDouble();
-        if (w > 0 && h > 0 && mounted) {
-          setState(() => _aspectRatio = w / h);
-        }
-        _disposeImageListener();
-      },
-      onError: (_, __) => _disposeImageListener(),
-    );
-    _imageStream!.addListener(_imageListener!);
+    final cached = CoverAspectCache.peek(url);
+    if (cached != null) {
+      if (mounted) setState(() => _aspectRatio = cached);
+      return;
+    }
+
+    final ratio = await CoverAspectCache.resolve(url);
+    if (!mounted || ratio == null) return;
+    setState(() => _aspectRatio = ratio);
   }
 
   @override
@@ -117,7 +96,7 @@ class _ShelfBookCoverState extends State<ShelfBookCover> {
           compact: widget.compact,
         );
     final padding = CoverLayout.innerPadding(size, pose);
-    final coverUrl = widget.book.coverImage;
+    final coverUrl = widget.book.catalogCover;
     final w = size.width;
     final h = size.height;
 
@@ -126,36 +105,43 @@ class _ShelfBookCoverState extends State<ShelfBookCover> {
       alignment: Alignment.bottomCenter,
       child: GestureDetector(
         onTap: widget.onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 280),
-          curve: Curves.easeOutCubic,
+        child: SizedBox(
           width: w,
           height: h,
-          decoration: BoxDecoration(
-            color: coverUrl != null ? Colors.white : widget.spineColor,
-            borderRadius: BorderRadius.circular(pose == CoverShelfPose.lying ? 10 : 12),
-            border: Border.all(color: Colors.black.withAlpha(26)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withAlpha(pose == CoverShelfPose.lying ? 45 : 56),
-                blurRadius: pose == CoverShelfPose.lying ? 10 : 12,
-                offset: Offset(pose == CoverShelfPose.lying ? 2 : 4, 4),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: coverUrl != null ? Colors.white : widget.spineColor,
+              borderRadius: BorderRadius.circular(
+                pose == CoverShelfPose.lying ? 10 : 12,
               ),
-            ],
-          ),
-          padding: coverUrl != null ? EdgeInsets.all(padding) : EdgeInsets.zero,
-          child: coverUrl != null
-              ? ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: CachedNetworkImage(
-                    imageUrl: coverUrl,
-                    fit: CoverLayout.coverFit(pose),
-                    width: double.infinity,
-                    height: double.infinity,
-                    errorWidget: (_, __, ___) => _spineFallback(w, pose),
+              border: Border.all(color: Colors.black.withAlpha(26)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withAlpha(
+                    pose == CoverShelfPose.lying ? 45 : 56,
                   ),
-                )
-              : _spineFallback(w, pose),
+                  blurRadius: pose == CoverShelfPose.lying ? 10 : 12,
+                  offset: Offset(pose == CoverShelfPose.lying ? 2 : 4, 4),
+                ),
+              ],
+            ),
+            child: Padding(
+              padding: coverUrl != null ? EdgeInsets.all(padding) : EdgeInsets.zero,
+              child: coverUrl != null
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: StillFrameImage(
+                        url: coverUrl,
+                        fit: CoverLayout.coverFit(pose),
+                        width: double.infinity,
+                        height: double.infinity,
+                        cacheWidth: CoverAspectCache.thumbWidth,
+                        errorWidget: _spineFallback(w, pose),
+                      ),
+                    )
+                  : _spineFallback(w, pose),
+            ),
+          ),
         ),
       ),
     );

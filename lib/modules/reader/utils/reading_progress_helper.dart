@@ -112,7 +112,7 @@ Future<void> openBookForReading(
       curve: curve,
     );
     if (Get.isRegistered<HomeController>() && Get.currentRoute == '/home') {
-      Get.find<HomeController>().refreshData();
+      Get.find<HomeController>().reloadOnReturn();
     }
   }
 

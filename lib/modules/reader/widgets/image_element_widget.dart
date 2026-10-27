@@ -27,6 +27,7 @@ class ImageElementWidget extends StatelessWidget {
         child: OfflineBookImage(
           url: element.content ?? '',
           fit: BoxFit.cover,
+          animate: true,
           errorBuilder: (context, error, stackTrace) {
             return Container(
               color: Colors.grey[300],

@@ -12,6 +12,13 @@ class BookOfflineSession {
       ..addAll(urlToLocalPath);
   }
 
+  /// Regista um ficheiro descarregado em segundo plano (só se o livro
+  /// ainda estiver aberto).
+  static void register(int bookId, String remoteUrl, String localPath) {
+    if (activeBookId != bookId) return;
+    _urlToLocal[remoteUrl.trim()] = localPath;
+  }
+
   static void clear() {
     activeBookId = null;
     _urlToLocal.clear();

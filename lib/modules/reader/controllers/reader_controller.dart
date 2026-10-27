@@ -2,7 +2,6 @@ import 'package:get/get.dart';
 import '../models/book_element.dart';
 import '../../../core/services/luditeca_api_service.dart';
 import '../services/reading_xp_service.dart';
-import 'package:flutter/foundation.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -390,24 +389,10 @@ class ReaderController extends GetxController {
   List<BookElement> getVisibleElements() {
     if (currentPage == null) return [];
 
-    // Debug log
-    debugPrint('Elementos na página: ${currentPage!.elements.length}');
-    debugPrint('Step atual: $_currentStep');
-
-    final visibleElements =
-        currentPage!.elements
-            .where((element) => element.step <= _currentStep.value)
-            .toList()
-          ..sort((a, b) => a.zIndex.compareTo(b.zIndex));
-
-    // Debug log dos elementos visíveis
-    for (var element in visibleElements) {
-      debugPrint(
-        'Elemento visível: ${element.type}, Step: ${element.step}, Audio: ${element.audio}',
-      );
-    }
-
-    return visibleElements;
+    return currentPage!.elements
+        .where((element) => element.step <= _currentStep.value)
+        .toList()
+      ..sort((a, b) => a.zIndex.compareTo(b.zIndex));
   }
 
   @override

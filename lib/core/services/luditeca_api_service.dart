@@ -201,6 +201,13 @@ class LuditecaApiService {
       );
     }
 
+    // PNG 400×300 do 1.º frame, gerado no upload. A capa original pode ser
+    // um GIF de vários MB e só é usada na ficha do livro.
+    final coverThumb = (item['cover_thumb_url'] ?? item['coverThumbUrl'])?.toString();
+    item['cover_thumb_url'] = coverThumb != null && coverThumb.trim().isNotEmpty
+        ? _ensureAbsoluteMediaUrl(coverThumb, defaultBucket: 'covers')
+        : null;
+
     final pdfUrl = item['pdf_url']?.toString();
     if (pdfUrl != null && pdfUrl.isNotEmpty) {
       item['pdf_url'] = _ensureAbsoluteMediaUrl(pdfUrl, defaultBucket: 'pages');
@@ -304,6 +311,8 @@ class LuditecaApiService {
   Future<void> _clearSession() async {
     _token = null;
     _currentUser = null;
+    invalidateBooksCache();
+    _bookDetailCache.clear();
     final prefs = await _prefs;
     await prefs.remove('auth_token');
     await prefs.remove('auth_user');
@@ -313,6 +322,11 @@ class LuditecaApiService {
     if (_isInitialized) return;
     await DevApiResolver.resolveIfNeeded();
     final prefs = await _prefs;
+    // Limpeza única de lixo antigo: os detalhes gravavam `pages.toString()`
+    // (não-JSON, nunca lido) em `book_pages_<id>`, inflacionando as prefs.
+    for (final key in prefs.getKeys().where((k) => k.startsWith('book_pages_'))) {
+      await prefs.remove(key);
+    }
     _token = prefs.getString('auth_token');
     final rawUser = prefs.getString('auth_user');
     if (rawUser != null && rawUser.isNotEmpty) {
@@ -397,13 +411,71 @@ class LuditecaApiService {
     return {'user': user, 'session': {'access_token': token}};
   }
 
-  Future<List<Map<String, dynamic>>> getBooks() async {
+  /// Catálogo em memória: Home, Biblioteca, categorias, favoritos e histórico
+  /// partilham a mesma lista em vez de cada ecrã pedir `/books` de novo.
+  static const Duration _booksCacheTtl = Duration(minutes: 3);
+  static const int _booksPageSize = 100;
+  List<Map<String, dynamic>>? _booksCache;
+  DateTime? _booksCacheAt;
+  Future<List<Map<String, dynamic>>>? _booksInflight;
+
+  /// Lista de livros (cartões, sem páginas). Usa cache em memória; pedidos
+  /// simultâneos partilham a mesma chamada. [forceRefresh] ignora a cache.
+  Future<List<Map<String, dynamic>>> getBooks({bool forceRefresh = false}) {
+    final cached = _booksCache;
+    final at = _booksCacheAt;
+    if (!forceRefresh &&
+        cached != null &&
+        at != null &&
+        DateTime.now().difference(at) < _booksCacheTtl) {
+      return Future.value(_copyBooks(cached));
+    }
+    final inflight = _booksInflight;
+    if (inflight != null) return inflight.then(_copyBooks);
+
+    final job = _fetchAllBooks();
+    _booksInflight = job;
+    return job.then((books) {
+      _booksCache = books;
+      _booksCacheAt = DateTime.now();
+      return _copyBooks(books);
+    }).whenComplete(() => _booksInflight = null);
+  }
+
+  void invalidateBooksCache() {
+    _booksCache = null;
+    _booksCacheAt = null;
+  }
+
+  /// Cópia rasa por livro: os ecrãs podem mutar os mapas sem afectar a cache.
+  List<Map<String, dynamic>> _copyBooks(List<Map<String, dynamic>> books) =>
+      books.map((b) => Map<String, dynamic>.from(b)).toList();
+
+  /// `GET /books` é paginado (máx. 100 por página); percorre todas as páginas.
+  Future<List<Map<String, dynamic>>> _fetchAllBooks() async {
     if (!_isInitialized) await initialize();
-    final response = await _requestList('GET', '/books');
-    return response
-        .whereType<Map>()
-        .map((e) => _normalizeBook(Map<String, dynamic>.from(e)))
-        .toList();
+    final out = <Map<String, dynamic>>[];
+    var offset = 0;
+    while (true) {
+      final response = await _requestJson(
+        'GET',
+        '/books',
+        query: {'limit': '$_booksPageSize', 'offset': '$offset'},
+      );
+      final data = response['data'];
+      final page = data is List ? data : const <dynamic>[];
+      out.addAll(
+        page
+            .whereType<Map>()
+            .map((e) => _normalizeBook(Map<String, dynamic>.from(e))),
+      );
+      final total = int.tryParse('${response['total']}');
+      offset += page.length;
+      if (page.length < _booksPageSize || total == null || offset >= total) {
+        break;
+      }
+    }
+    return out;
   }
 
   Future<List<Map<String, dynamic>>> getBooksByCategory(int categoryId) async {
@@ -428,10 +500,44 @@ class LuditecaApiService {
     }).toList();
   }
 
+  /// Livros completos (com páginas) recentes: a pré-carga nos detalhes e o
+  /// leitor partilham o mesmo pedido em vez de descarregar o livro duas vezes.
+  static const Duration _bookDetailTtl = Duration(minutes: 2);
+  static const int _bookDetailMax = 3;
+  final Map<String, ({DateTime at, Map<String, dynamic> book})> _bookDetailCache =
+      {};
+  final Map<String, Future<Map<String, dynamic>>> _bookDetailInflight = {};
+
   Future<Map<String, dynamic>?> getBookById(String bookId) async {
-    if (!_isInitialized) await initialize();
-    final response = await _requestJson('GET', '/books/$bookId');
-    return _normalizeBook(response);
+    final hit = _bookDetailCache[bookId];
+    if (hit != null && DateTime.now().difference(hit.at) < _bookDetailTtl) {
+      return Map<String, dynamic>.from(hit.book);
+    }
+    final job = _bookDetailInflight.putIfAbsent(bookId, () async {
+      try {
+        if (!_isInitialized) await initialize();
+        final response = await _requestJson('GET', '/books/$bookId');
+        final book = _normalizeBook(response);
+        _bookDetailCache.remove(bookId);
+        _bookDetailCache[bookId] = (at: DateTime.now(), book: book);
+        while (_bookDetailCache.length > _bookDetailMax) {
+          _bookDetailCache.remove(_bookDetailCache.keys.first);
+        }
+        return book;
+      } finally {
+        _bookDetailInflight.remove(bookId);
+      }
+    });
+    return Map<String, dynamic>.from(await job);
+  }
+
+  /// Aquece a cache do livro completo sem bloquear a UI (ex.: nos detalhes,
+  /// antes de o utilizador tocar em «Ler»).
+  void prefetchBook(String bookId) {
+    getBookById(bookId).catchError((Object e) {
+      debugPrint('Pré-carga do livro $bookId falhou: $e');
+      return null;
+    });
   }
 
   /// Devolve `null` se o livro não existir (404), em vez de lançar excepção.
@@ -512,8 +618,15 @@ class LuditecaApiService {
           : <String, dynamic>{};
       if (progress.isEmpty) return [];
 
+      // Cartões vêm do catálogo em cache (uma chamada), não de N pedidos
+      // sequenciais a `/books/:id` com todas as páginas de cada livro.
+      final catalog = <String, Map<String, dynamic>>{
+        for (final b in await getBooks()) '${b['id']}': b,
+      };
+
       final List<Map<String, dynamic>> booksInProgress = [];
       final staleBookIds = <String>[];
+      final missing = <MapEntry<String, List<int>>>[];
 
       for (final entry in progress.entries) {
         if (_isXpMetaProgressKey(entry.key.toString())) continue;
@@ -525,21 +638,36 @@ class LuditecaApiService {
         if (page <= 0 && step <= 0) continue;
 
         final bookId = entry.key.toString();
+        final card = catalog[bookId];
+        if (card != null) {
+          booksInProgress.add({
+            ...card,
+            'saved_page': page,
+            'saved_step': step,
+          });
+        } else {
+          missing.add(MapEntry(bookId, [page, step]));
+        }
+      }
+
+      // Só confirma (em paralelo) os que não estão no catálogo — livro
+      // apagado vs. catálogo desactualizado.
+      await Future.wait(missing.map((m) async {
         try {
-          final bookData = await tryGetBookById(bookId);
+          final bookData = await tryGetBookById(m.key);
           if (bookData != null) {
             booksInProgress.add({
               ...bookData,
-              'saved_page': page,
-              'saved_step': step,
+              'saved_page': m.value[0],
+              'saved_step': m.value[1],
             });
           } else {
-            staleBookIds.add(bookId);
+            staleBookIds.add(m.key);
           }
         } catch (e) {
-          debugPrint('Progresso: livro $bookId ignorado ($e)');
+          debugPrint('Progresso: livro ${m.key} ignorado ($e)');
         }
-      }
+      }));
 
       if (staleBookIds.isNotEmpty) {
         await _removeStaleProgressEntries(userId, staleBookIds);

@@ -42,27 +42,6 @@ const List<LayoutOption> kMenuLayoutOptions = [
   ),
 ];
 
-const List<LayoutOption> kActivitiesLayoutOptions = [
-  LayoutOption(
-    id: 'grid',
-    emoji: '⊞',
-    title: 'Grade 2×2',
-    description: 'Cards em grade compacta',
-  ),
-  LayoutOption(
-    id: 'grid-large',
-    emoji: '⬛',
-    title: 'Grade Expandida',
-    description: 'Cards grandes com ícone lateral',
-  ),
-  LayoutOption(
-    id: 'list',
-    emoji: '☰',
-    title: 'Lista',
-    description: 'Itens em lista compacta',
-  ),
-];
-
 const List<LayoutOption> kLibraryLayoutOptions = [
   LayoutOption(
     id: 'shelf',

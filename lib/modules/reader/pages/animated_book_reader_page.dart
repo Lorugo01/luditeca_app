@@ -62,6 +62,14 @@ class _AnimatedBookReaderPageState extends State<AnimatedBookReaderPage> {
 
   double _fontSize = 18;
   ReaderColorMode _colorMode = ReaderColorMode.normal;
+  /// O [PageFlipWidget] não reconstrói os filhos; este notifier força
+  /// actualização de texto/cores quando o utilizador muda acessibilidade.
+  final ValueNotifier<int> _a11yRevision = ValueNotifier(0);
+
+  /// Página visível: só ela anima o GIF (as vizinhas do PageFlip ficam
+  /// no frame estático para não descodificar vários GIFs ao mesmo tempo).
+  final ValueNotifier<int> _activePageIndex = ValueNotifier(0);
+  bool _accessibilityPanelOpen = false;
 
   int? _selectedOption;
   bool _showQuizFeedback = false;
@@ -152,6 +160,7 @@ class _AnimatedBookReaderPageState extends State<AnimatedBookReaderPage> {
       _currentIndex = startIndex;
       _loading = false;
     });
+    _activePageIndex.value = startIndex;
 
     await _initSoundtrack(loaded);
     unawaited(_prepareNarrationForIndex(startIndex));
@@ -275,34 +284,35 @@ class _AnimatedBookReaderPageState extends State<AnimatedBookReaderPage> {
     }
   }
 
-  void _openSettingsSheet() {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (sheetContext) {
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            return SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+  Widget _buildAccessibilityPanelOverlay() {
+    if (!_accessibilityPanelOpen) {
+      return const SizedBox.shrink();
+    }
+
+    final top = MediaQuery.paddingOf(context).top;
+
+    return Positioned.fill(
+      child: GestureDetector(
+        onTap: _closeAccessibilityPanel,
+        behavior: HitTestBehavior.translucent,
+        child: Stack(
+          children: [
+            Positioned(
+              top: top + 52,
+              right: 12,
+              child: GestureDetector(
+                onTap: () {},
                 child: AnimatedReaderAccessibilityPanel(
                   fontSize: _fontSize,
                   colorMode: _colorMode,
-                  onFontSizeChanged: (v) {
-                    setState(() => _fontSize = v);
-                    setSheetState(() {});
-                  },
-                  onColorModeChanged: (m) {
-                    setState(() => _colorMode = m);
-                    setSheetState(() {});
-                  },
+                  onFontSizeChanged: _updateFontSize,
+                  onColorModeChanged: _updateColorMode,
                 ),
               ),
-            );
-          },
-        );
-      },
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -345,6 +355,7 @@ class _AnimatedBookReaderPageState extends State<AnimatedBookReaderPage> {
       _narrationReady = false;
       _narrationPlaying = false;
     });
+    _activePageIndex.value = index;
     unawaited(_prepareNarrationForIndex(index));
     if (index == _slots.length - 1) {
       _registerCompletionIfNeeded();
@@ -371,8 +382,32 @@ class _AnimatedBookReaderPageState extends State<AnimatedBookReaderPage> {
     );
   }
 
+  void _updateFontSize(double value) {
+    final next = value.clamp(12, 40).toDouble();
+    if (_fontSize == next) return;
+    setState(() => _fontSize = next);
+    _a11yRevision.value++;
+  }
+
+  void _updateColorMode(ReaderColorMode mode) {
+    if (_colorMode == mode) return;
+    setState(() => _colorMode = mode);
+    _a11yRevision.value++;
+  }
+
+  void _toggleAccessibilityPanel() {
+    setState(() => _accessibilityPanelOpen = !_accessibilityPanelOpen);
+  }
+
+  void _closeAccessibilityPanel() {
+    if (!_accessibilityPanelOpen) return;
+    setState(() => _accessibilityPanelOpen = false);
+  }
+
   @override
   void dispose() {
+    _a11yRevision.dispose();
+    _activePageIndex.dispose();
     unawaited(ReadingXpService.instance.endSession());
     _disposed = true;
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
@@ -476,7 +511,20 @@ class _AnimatedBookReaderPageState extends State<AnimatedBookReaderPage> {
               : const SizedBox.shrink(),
         );
       } else if (slot.page != null) {
-        children.add(_buildPageView(slot.page!, isActivePage: i == _currentIndex));
+        final page = slot.page!;
+        final pageIndex = i;
+        children.add(
+          ValueListenableBuilder<int>(
+            valueListenable: _a11yRevision,
+            builder: (context, _, __) {
+              return _buildPageView(
+                page,
+                pageIndex: pageIndex,
+                isActivePage: pageIndex == _currentIndex,
+              );
+            },
+          ),
+        );
       } else {
         children.add(const SizedBox.shrink());
       }
@@ -492,26 +540,31 @@ class _AnimatedBookReaderPageState extends State<AnimatedBookReaderPage> {
           backgroundColor: Colors.black,
           duration: const Duration(milliseconds: 680),
           cutoffForward: 0.72,
-          cutoffPrevious: 0.18,
+          cutoffPrevious: 0.12,
           onFlipStart: () => unawaited(_stopNarration()),
           onPageFlipped: _onPageChanged,
           children: children,
         ),
+        // Zonas laterais: toque e arraste para voltar/avançar sem bloquear o centro.
+        if (!_immersiveMode) _buildPageTurnGestures(),
         // Chrome fora do PageFlip: o pacote não reconstrói as páginas ao mudar índice.
         if (!_immersiveMode) ...[
           _buildTopOverlay(),
           _buildSideNav(isLast: _currentIndex >= _slots.length - 1),
+          _buildAccessibilityPanelOverlay(),
           Positioned(
             left: 0,
             right: 0,
             bottom: 0,
             child: SafeArea(
               top: false,
-              child: _buildPageDots(),
+              child: IgnorePointer(child: _buildPageDots()),
             ),
           ),
-        ] else
+        ] else ...[
           _buildImmersiveControls(),
+          _buildAccessibilityPanelOverlay(),
+        ],
       ],
     );
   }
@@ -528,7 +581,11 @@ class _AnimatedBookReaderPageState extends State<AnimatedBookReaderPage> {
     return BoxFit.contain;
   }
 
-  Widget _buildPageView(AnimatedPage page, {required bool isActivePage}) {
+  Widget _buildPageView(
+    AnimatedPage page, {
+    required int pageIndex,
+    required bool isActivePage,
+  }) {
     final hasImage = page.imageUrl != null && page.imageUrl!.isNotEmpty;
     final hasText = page.text != null && page.text!.trim().isNotEmpty;
     final hasNarration =
@@ -540,6 +597,7 @@ class _AnimatedBookReaderPageState extends State<AnimatedBookReaderPage> {
     final fit = _pageImageFit(imageOnly: imageOnly);
     final imageStack = _buildPageImageStack(
       page: page,
+      pageIndex: pageIndex,
       theme: theme,
       fit: fit,
       hasImage: hasImage,
@@ -586,6 +644,7 @@ class _AnimatedBookReaderPageState extends State<AnimatedBookReaderPage> {
 
   Widget _buildPageImageStack({
     required AnimatedPage page,
+    required int pageIndex,
     required ReaderPageTheme theme,
     required BoxFit fit,
     required bool hasImage,
@@ -597,16 +656,20 @@ class _AnimatedBookReaderPageState extends State<AnimatedBookReaderPage> {
               builder: (context, constraints) {
                 return Center(
                   child: _applyColorFilter(
-                    OfflineBookImage(
-                      url: page.imageUrl!,
-                      fit: fit,
-                      width: constraints.maxWidth,
-                      height: constraints.maxHeight,
-                      alignment: Alignment.center,
-                      errorBuilder: (_, __, ___) => const Icon(
-                        Icons.broken_image,
-                        color: Colors.white38,
-                        size: 64,
+                    ValueListenableBuilder<int>(
+                      valueListenable: _activePageIndex,
+                      builder: (context, activeIndex, _) => OfflineBookImage(
+                        url: page.imageUrl!,
+                        fit: fit,
+                        width: constraints.maxWidth,
+                        height: constraints.maxHeight,
+                        alignment: Alignment.center,
+                        animate: activeIndex == pageIndex,
+                        errorBuilder: (_, __, ___) => const Icon(
+                          Icons.broken_image,
+                          color: Colors.white38,
+                          size: 64,
+                        ),
                       ),
                     ),
                   ),
@@ -652,63 +715,85 @@ class _AnimatedBookReaderPageState extends State<AnimatedBookReaderPage> {
             Row(
               children: [
                 _overlayIconButton(
-                  icon: Icons.menu,
-                  onPressed: _handleBack,
-                ),
-                Expanded(
-                  child: Column(
-                    children: [
-                      Text(
-                        _activeBook.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 14,
-                          shadows: [Shadow(color: Colors.black54, blurRadius: 4)],
-                        ),
-                      ),
-                      Text(
-                        '${_currentIndex + 1} / ${_slots.length}',
-                        style: TextStyle(
-                          color: Colors.white.withAlpha(179),
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (_soundtrackReady)
-                  _overlayIconButton(
-                    icon: _soundtrackPlaying ? Icons.music_off : Icons.music_note,
-                    onPressed: _toggleSoundtrack,
-                  ),
-                _overlayIconButton(
-                  icon: Icons.settings,
-                  color: const Color(0xFF9F7AEA),
-                  onPressed: _openSettingsSheet,
-                ),
-                _overlayIconButton(
-                  icon: Icons.fullscreen,
-                  onPressed: () => setState(() => _immersiveMode = true),
-                ),
-                _overlayIconButton(
                   icon: Icons.close,
                   onPressed: _handleBack,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: IgnorePointer(
+                    child: Column(
+                      children: [
+                        Text(
+                          _activeBook.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 14,
+                            shadows: [Shadow(color: Colors.black54, blurRadius: 4)],
+                          ),
+                        ),
+                        Text(
+                          '${_currentIndex + 1} / ${_slots.length}',
+                          style: TextStyle(
+                            color: Colors.white.withAlpha(179),
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_soundtrackReady) ...[
+                      _overlayIconButton(
+                        icon: _soundtrackPlaying
+                            ? Icons.music_off
+                            : Icons.music_note,
+                        onPressed: _toggleSoundtrack,
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    _overlayIconButton(
+                      icon: Icons.settings,
+                      color: _accessibilityPanelOpen
+                          ? const Color(0xFF7C3AED)
+                          : const Color(0xFF9F7AEA),
+                      onPressed: _toggleAccessibilityPanel,
+                    ),
+                    const SizedBox(width: 8),
+                    _overlayIconButton(
+                      icon: Icons.fullscreen,
+                      onPressed: () {
+                        _closeAccessibilityPanel();
+                        setState(() => _immersiveMode = true);
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    _overlayIconButton(
+                      icon: Icons.close,
+                      onPressed: _handleBack,
+                    ),
+                  ],
                 ),
               ],
             ),
             const SizedBox(height: 10),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(99),
-              child: LinearProgressIndicator(
-                value: progress,
-                minHeight: 3,
-                backgroundColor: Colors.white.withAlpha(56),
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  AppLayoutTokens.primary,
+            IgnorePointer(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(99),
+                child: LinearProgressIndicator(
+                  value: progress,
+                  minHeight: 3,
+                  backgroundColor: Colors.white.withAlpha(56),
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    AppLayoutTokens.primary,
+                  ),
                 ),
               ),
             ),
@@ -728,13 +813,18 @@ class _AnimatedBookReaderPageState extends State<AnimatedBookReaderPage> {
         children: [
           _overlayIconButton(
             icon: Icons.settings,
-            color: const Color(0xFF9F7AEA),
-            onPressed: _openSettingsSheet,
+            color: _accessibilityPanelOpen
+                ? const Color(0xFF7C3AED)
+                : const Color(0xFF9F7AEA),
+            onPressed: _toggleAccessibilityPanel,
           ),
           const SizedBox(width: 8),
           _overlayIconButton(
             icon: Icons.fullscreen_exit,
-            onPressed: () => setState(() => _immersiveMode = false),
+            onPressed: () {
+              _closeAccessibilityPanel();
+              setState(() => _immersiveMode = false);
+            },
           ),
         ],
       ),
@@ -753,22 +843,72 @@ class _AnimatedBookReaderPageState extends State<AnimatedBookReaderPage> {
         customBorder: const CircleBorder(),
         onTap: onPressed,
         child: SizedBox(
-          width: 40,
-          height: 40,
-          child: Icon(icon, color: Colors.white, size: 20),
+          width: 36,
+          height: 36,
+          child: Icon(icon, color: Colors.white, size: 18),
         ),
+      ),
+    );
+  }
+
+  static const double _sideNavWidth = 56;
+
+  /// Margens laterais para toque/arraste — não cobrem o centro (o PageFlip precisa disso).
+  Widget _buildPageTurnGestures() {
+    final isLast = _currentIndex >= _slots.length - 1;
+    return Positioned.fill(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _pageTurnEdgeZone(
+            enabled: _currentIndex > 0,
+            onTurn: _goPrevious,
+            forwardVelocity: false,
+          ),
+          const Spacer(),
+          _pageTurnEdgeZone(
+            enabled: true,
+            onTurn: isLast ? () => _registerCompletionIfNeeded() : _goNext,
+            forwardVelocity: true,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _pageTurnEdgeZone({
+    required bool enabled,
+    required VoidCallback onTurn,
+    required bool forwardVelocity,
+  }) {
+    return SizedBox(
+      width: 88,
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: enabled ? onTurn : null,
+        onHorizontalDragEnd: enabled
+            ? (details) {
+                final velocity = details.primaryVelocity ?? 0;
+                final triggered = forwardVelocity
+                    ? velocity < -180
+                    : velocity > 180;
+                if (triggered) onTurn();
+              }
+            : null,
       ),
     );
   }
 
   Widget _buildSideNav({required bool isLast}) {
     return Stack(
+      clipBehavior: Clip.none,
       children: [
         if (_currentIndex > 0)
           Positioned(
             left: 8,
             top: 0,
             bottom: 0,
+            width: _sideNavWidth,
             child: Align(
               alignment: Alignment.center,
               child: _navArrow(Icons.chevron_left, _goPrevious),
@@ -778,6 +918,7 @@ class _AnimatedBookReaderPageState extends State<AnimatedBookReaderPage> {
           right: 8,
           top: 0,
           bottom: 0,
+          width: _sideNavWidth,
           child: Align(
             alignment: Alignment.center,
             child: _navArrow(

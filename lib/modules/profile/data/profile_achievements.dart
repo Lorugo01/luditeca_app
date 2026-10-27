@@ -27,8 +27,7 @@ enum AchievementCategory {
   level('Nível'),
   time('Tempo'),
   favorites('Favoritos'),
-  xp('XP'),
-  activities('Atividades');
+  xp('XP');
 
   const AchievementCategory(this.label);
   final String label;
@@ -93,8 +92,6 @@ class AchievementProgress {
         return AchievementCategory.favorites;
       case 'xp_total':
         return AchievementCategory.xp;
-      case 'activities_done':
-        return AchievementCategory.activities;
       default:
         return AchievementCategory.reading;
     }
@@ -359,36 +356,6 @@ const List<ProfileAchievementDef> kProfileAchievements = [
     category: AchievementCategory.xp,
     threshold: 5000,
     xpReward: 300,
-  ),
-  ProfileAchievementDef(
-    id: 'activity_1',
-    emoji: '🎮',
-    title: 'Primeira atividade',
-    description: 'Complete 1 atividade',
-    category: AchievementCategory.activities,
-    threshold: 1,
-    xpReward: 100,
-    comingSoon: true,
-  ),
-  ProfileAchievementDef(
-    id: 'activity_5',
-    emoji: '🎯',
-    title: 'Aventureiro',
-    description: 'Complete 5 atividades',
-    category: AchievementCategory.activities,
-    threshold: 5,
-    xpReward: 250,
-    comingSoon: true,
-  ),
-  ProfileAchievementDef(
-    id: 'puzzle_1',
-    emoji: '🧩',
-    title: 'Mestre dos puzzles',
-    description: 'Complete 1 puzzle',
-    category: AchievementCategory.activities,
-    threshold: 1,
-    xpReward: 80,
-    comingSoon: true,
   ),
 ];
 

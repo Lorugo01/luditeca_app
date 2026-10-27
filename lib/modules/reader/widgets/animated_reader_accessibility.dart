@@ -106,7 +106,7 @@ class AnimatedReaderAccessibilityPanel extends StatelessWidget {
       borderRadius: BorderRadius.circular(24),
       color: Colors.white,
       child: Container(
-        width: 260,
+        width: 280,
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(24),
@@ -132,6 +132,7 @@ class AnimatedReaderAccessibilityPanel extends StatelessWidget {
                   icon: Icons.remove,
                   onTap: () => onFontSizeChanged((fontSize - 2).clamp(12, 40)),
                 ),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Text(
                     '${fontSize.toInt()}px',
@@ -142,6 +143,7 @@ class AnimatedReaderAccessibilityPanel extends StatelessWidget {
                     ),
                   ),
                 ),
+                const SizedBox(width: 12),
                 _roundBtn(
                   icon: Icons.add,
                   onTap: () => onFontSizeChanged((fontSize + 2).clamp(12, 40)),
@@ -159,27 +161,25 @@ class AnimatedReaderAccessibilityPanel extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
+            GridView.count(
+              crossAxisCount: 2,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              mainAxisSpacing: 8,
+              crossAxisSpacing: 8,
+              childAspectRatio: 2.4,
               children: _modes.map((m) {
                 final selected = colorMode == m.$1;
-                return InkWell(
-                  onTap: () => onColorModeChanged(m.$1),
+                return Material(
+                  color: selected
+                      ? const Color(0xFF9F7AEA)
+                      : const Color(0xFFF0F4FF),
                   borderRadius: BorderRadius.circular(16),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: selected
-                          ? const Color(0xFF9F7AEA)
-                          : const Color(0xFFF0F4FF),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
+                  child: InkWell(
+                    onTap: () => onColorModeChanged(m.$1),
+                    borderRadius: BorderRadius.circular(16),
                     child: Row(
-                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(
                           m.$3,
@@ -187,12 +187,15 @@ class AnimatedReaderAccessibilityPanel extends StatelessWidget {
                           color: selected ? Colors.white : Colors.black54,
                         ),
                         const SizedBox(width: 6),
-                        Text(
-                          m.$2,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: selected ? Colors.white : Colors.black87,
+                        Flexible(
+                          child: Text(
+                            m.$2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: selected ? Colors.white : Colors.black87,
+                            ),
                           ),
                         ),
                       ],

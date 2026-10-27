@@ -1,6 +1,8 @@
-import 'package:animate_do/animate_do.dart';
 import 'package:flutter/material.dart';
 
+import '../../../widgets/entrance_animation.dart';
+import '../../library/widgets/cover_aspect_cache.dart';
+import '../../library/widgets/cover_layout.dart';
 import 'offline_book_image.dart';
 
 /// Ecrã de preparação do livro (metadados + download de imagens).
@@ -38,12 +40,14 @@ class BookReadingLoadingView extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              FadeInDown(
+              EntranceAnimation(
+                effect: EntranceEffect.fadeDown,
                 duration: const Duration(milliseconds: 500),
                 child: _CoverThumb(url: coverUrl),
               ),
               const SizedBox(height: 28),
-              FadeIn(
+              EntranceAnimation(
+                effect: EntranceEffect.fade,
                 delay: const Duration(milliseconds: 200),
                 child: Text(
                   title,
@@ -58,7 +62,8 @@ class BookReadingLoadingView extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 32),
-              FadeInUp(
+              EntranceAnimation(
+                effect: EntranceEffect.fadeUp,
                 delay: const Duration(milliseconds: 350),
                 child: const SizedBox(
                   width: 56,
@@ -70,7 +75,8 @@ class BookReadingLoadingView extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 24),
-              FadeIn(
+              EntranceAnimation(
+                effect: EntranceEffect.fade,
                 delay: const Duration(milliseconds: 450),
                 child: Text(
                   phaseLabel,
@@ -82,7 +88,8 @@ class BookReadingLoadingView extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 16),
-              FadeIn(
+              EntranceAnimation(
+                effect: EntranceEffect.fade,
                 delay: const Duration(milliseconds: 500),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(8),
@@ -110,19 +117,63 @@ class BookReadingLoadingView extends StatelessWidget {
   }
 }
 
-class _CoverThumb extends StatelessWidget {
+class _CoverThumb extends StatefulWidget {
   const _CoverThumb({this.url});
 
   final String? url;
 
   @override
+  State<_CoverThumb> createState() => _CoverThumbState();
+}
+
+class _CoverThumbState extends State<_CoverThumb> {
+  double? _aspectRatio;
+
+  @override
+  void initState() {
+    super.initState();
+    _resolveCoverDimensions();
+  }
+
+  @override
+  void didUpdateWidget(_CoverThumb oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.url != widget.url) {
+      _aspectRatio = null;
+      _resolveCoverDimensions();
+    }
+  }
+
+  /// Proporção via cache partilhado (descodifica miniatura, não a capa 4K).
+  Future<void> _resolveCoverDimensions() async {
+    final url = widget.url?.trim();
+    if (url == null || url.isEmpty) return;
+    final cached = CoverAspectCache.peek(url);
+    if (cached != null) {
+      _aspectRatio = cached;
+      return;
+    }
+    final ratio = await CoverAspectCache.resolve(url);
+    if (!mounted || ratio == null || url != widget.url?.trim()) return;
+    setState(() => _aspectRatio = ratio);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final hasUrl = url != null && url!.trim().isNotEmpty;
-    return Container(
-      width: 120,
-      height: 160,
+    final hasUrl = widget.url != null && widget.url!.trim().isNotEmpty;
+    final aspect = _aspectRatio ?? 0.71;
+    final pose = CoverLayout.poseForRatio(aspect);
+    final size = CoverLayout.loadingCoverSize(aspectRatio: aspect);
+    final padding = CoverLayout.innerPadding(size, pose);
+    final borderRadius = pose == CoverShelfPose.lying ? 10.0 : 12.0;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 280),
+      curve: Curves.easeOutCubic,
+      width: size.width,
+      height: size.height,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(borderRadius),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withAlpha(120),
@@ -134,10 +185,15 @@ class _CoverThumb extends StatelessWidget {
       ),
       clipBehavior: Clip.antiAlias,
       child: hasUrl
-          ? OfflineBookImage(
-              url: url!,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => const _PlaceholderIcon(),
+          ? Padding(
+              padding: EdgeInsets.all(padding),
+              child: OfflineBookImage(
+                url: widget.url!,
+                fit: CoverLayout.coverFit(pose),
+                width: double.infinity,
+                height: double.infinity,
+                errorBuilder: (_, __, ___) => const _PlaceholderIcon(),
+              ),
             )
           : const _PlaceholderIcon(),
     );

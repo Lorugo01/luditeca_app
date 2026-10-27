@@ -49,13 +49,6 @@ const List<_NavItem> _kNavItems = [
     activeRoots: ['/favorites'],
   ),
   _NavItem(
-    route: '/activities',
-    emoji: '🎮',
-    label: 'Atividades',
-    shortLabel: 'Jogos',
-    activeRoots: ['/activities'],
-  ),
-  _NavItem(
     route: '/settings',
     emoji: '⚙️',
     label: 'Config.',
